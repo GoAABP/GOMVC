@@ -1,0 +1,240 @@
+@model GOMVC.Models.SaldosCarteraViewModel
+
+@{
+    ViewData["Title"] = "Saldos Cartera";
+}
+
+<h2>Saldos Cartera</h2>
+
+<!-- Pagination Controls -->
+<div>
+    Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+    @if (Model.PageNumber > 1)
+    {
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize">Previous</a>
+    }
+    @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+    {
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize">Next</a>
+    }
+</div>
+
+<!-- Data Table -->
+<table class="table">
+    <thead>
+        <tr>
+            <th>DBKEY</th>
+            <th>IdSolicitud</th>
+            <th>IdCredito</th>
+            <th>IdPersona</th>
+            <th>Referencia</th>
+            <th>Afiliado</th>
+            <th>Nombre</th>
+            <th>Monto</th>
+            <th>Comision</th>
+            <th>InteresesTotales</th>
+            <th>MontoTotal</th>
+            <th>Pagos</th>
+            <th>AmortPagadas</th>
+            <th>CapitalPagado</th>
+            <th>InteresPagado</th>
+            <th>IVAPagado</th>
+            <th>CargoPTardioPagado</th>
+            <th>MoratorioPagado</th>
+            <th>PagoEnExceso</th>
+            <th>ComisionPagada</th>
+            <th>TotalPagado</th>
+            <th>AjustesCapital</th>
+            <th>SaldoCapital</th>
+            <th>SaldoInteres</th>
+            <th>SaldoIVAInteres</th>
+            <th>SaldoCargoPTardio</th>
+            <th>SaldoMoratorios</th>
+            <th>SaldoPagoExceso</th>
+            <th>SaldoComision</th>
+            <th>SaldoTotal</th>
+            <th>ImportePago</th>
+            <th>IdConvenio</th>
+            <th>Dependencia</th>
+            <th>PrimerPagoTeorico</th>
+            <th>UltimoPago</th>
+            <th>TipoFinanciamiento</th>
+            <th>CapitalVigente</th>
+            <th>CapitalVencido</th>
+            <th>InteresesVencidos</th>
+            <th>Vencido</th>
+            <th>SaldoInsoluto</th>
+            <th>SdoTotalCListasCobro</th>
+            <th>SdoVencidoCListCobro</th>
+            <th>EstatusCartera</th>
+            <th>Estatus</th>
+            <th>Sucursal</th>
+            <th>FDesembolso</th>
+            <th>Frecuencia</th>
+            <th>PrimerPagoReal</th>
+            <th>UltimoPagoCListCobro</th>
+            <th>UltimoPagoAplicado</th>
+            <th>DiasUltimoPago</th>
+            <th>DiasAtraso</th>
+            <th>CuotasAtraso</th>
+            <th>PeriodosAtraso</th>
+            <th>Pago</th>
+            <th>MontoUltimoPago</th>
+            <th>TasaIntAnual</th>
+            <th>Gestor</th>
+            <th>Motivo</th>
+            <th>Banco</th>
+            <th>Estado</th>
+            <th>Ciudad</th>
+            <th>ComVigente</th>
+            <th>ComVencida</th>
+            <th>Clabe</th>
+            <th>SigPago</th>
+            <th>MontoSigPago</th>
+            <th>VFondeador</th>
+            <th>ValidaDomi</th>
+            <th>VAfiliateIdO</th>
+            <th>VAfiliateO</th>
+            <th>SaldoRetencionAdm</th>
+            <th>RFC</th>
+            <th>VMotiveExt</th>
+            <th>IPeriodsExt</th>
+            <th>VCommentExt</th>
+            <th>NRetencion</th>
+            <th>NJoPay</th>
+            <th>IMaxDays</th>
+            <th>VMaxDate</th>
+            <th>NLiquidate</th>
+            <th>NLiqPrin</th>
+            <th>NLiqInt</th>
+            <th>NLiqMor</th>
+            <th>NLiqCha</th>
+            <th>NLiqPrinTran</th>
+            <th>NLiqIntTran</th>
+            <th>NLiqMorTran</th>
+            <th>NLiqChaTran</th>
+            <th>NLiqRetTran</th>
+            <th>VScoreBuro</th>
+            <th>VCollectStatus</th>
+            <th>NCAT</th>
+            <th>VOpTable</th>
+            <th>FechaGenerado</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model.SaldosCartera)
+        {
+            <tr>
+                <td>@item.DBKEY</td>
+                <td>@item.IdSolicitud</td>
+                <td>@item.IdCredito</td>
+                <td>@item.IdPersona</td>
+                <td>@item.Referencia</td>
+                <td>@item.Afiliado</td>
+                <td>@item.Nombre</td>
+                <td>@item.Monto</td>
+                <td>@item.Comision</td>
+                <td>@item.InteresesTotales</td>
+                <td>@item.MontoTotal</td>
+                <td>@item.Pagos</td>
+                <td>@item.AmortPagadas</td>
+                <td>@item.CapitalPagado</td>
+                <td>@item.InteresPagado</td>
+                <td>@item.IVAPagado</td>
+                <td>@item.CargoPTardioPagado</td>
+                <td>@item.MoratorioPagado</td>
+                <td>@item.PagoEnExceso</td>
+                <td>@item.ComisionPagada</td>
+                <td>@item.TotalPagado</td>
+                <td>@item.AjustesCapital</td>
+                <td>@item.SaldoCapital</td>
+                <td>@item.SaldoInteres</td>
+                <td>@item.SaldoIVAInteres</td>
+                <td>@item.SaldoCargoPTardio</td>
+                <td>@item.SaldoMoratorios</td>
+                <td>@item.SaldoPagoExceso</td>
+                <td>@item.SaldoComision</td>
+                <td>@item.SaldoTotal</td>
+                <td>@item.ImportePago</td>
+                <td>@item.IdConvenio</td>
+                <td>@item.Dependencia</td>
+                <td>@item.PrimerPagoTeorico</td>
+                <td>@item.UltimoPago</td>
+                <td>@item.TipoFinanciamiento</td>
+                <td>@item.CapitalVigente</td>
+                <td>@item.CapitalVencido</td>
+                <td>@item.InteresesVencidos</td>
+                <td>@item.Vencido</td>
+                <td>@item.SaldoInsoluto</td>
+                <td>@item.SdoTotalCListasCobro</td>
+                <td>@item.SdoVencidoCListCobro</td>
+                <td>@item.EstatusCartera</td>
+                <td>@item.Estatus</td>
+                <td>@item.Sucursal</td>
+                <td>@item.FDesembolso</td>
+                <td>@item.Frecuencia</td>
+                <td>@item.PrimerPagoReal</td>
+                <td>@item.UltimoPagoCListCobro</td>
+                <td>@item.UltimoPagoAplicado</td>
+                <td>@item.DiasUltimoPago</td>
+                <td>@item.DiasAtraso</td>
+                <td>@item.CuotasAtraso</td>
+                <td>@item.PeriodosAtraso</td>
+                <td>@item.Pago</td>
+                <td>@item.MontoUltimoPago</td>
+                <td>@item.TasaIntAnual</td>
+                <td>@item.Gestor</td>
+                <td>@item.Motivo</td>
+                <td>@item.Banco</td>
+                <td>@item.Estado</td>
+                <td>@item.Ciudad</td>
+                <td>@item.ComVigente</td>
+                <td>@item.ComVencida</td>
+                <td>Clabe</td>
+                <td>@item.SigPago</td>
+                <td>@item.MontoSigPago</td>
+                <td>@item.VFondeador</td>
+                <td>@item.ValidaDomi</td>
+                <td>@item.VAfiliateIdO</td>
+                <td>@item.VAfiliateO</td>
+                <td>@item.SaldoRetencionAdm</td>
+                <td>@item.RFC</td>
+                <td>@item.VMotiveExt</td>
+                <td>@item.IPeriodsExt</td>
+                <td>@item.VCommentExt</td>
+                <td>@item.NRetencion</td>
+                <td>@item.NJoPay</td>
+                <td>@item.IMaxDays</td>
+                <td>@item.VMaxDate</td>
+                <td>@item.NLiquidate</td>
+                <td>@item.NLiqPrin</td>
+                <td>@item.NLiqInt</td>
+                <td>@item.NLiqMor</td>
+                <td>@item.NLiqCha</td>
+                <td>@item.NLiqPrinTran</td>
+                <td>@item.NLiqIntTran</td>
+                <td>@item.NLiqMorTran</td>
+                <td>@item.NLiqChaTran</td>
+                <td>@item.NLiqRetTran</td>
+                <td>@item.VScoreBuro</td>
+                <td>@item.VCollectStatus</td>
+                <td>@item.NCAT</td>
+                <td>@item.VOpTable</td>
+                <td>@item.FechaGenerado</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- Pagination Controls -->
+<div>
+    Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+    @if (Model.PageNumber > 1)
+    {
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize">Previous</a>
+    }
+    @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+    {
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize">Next</a>
+    }
+</div>

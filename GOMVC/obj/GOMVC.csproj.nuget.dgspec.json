@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj": {}
+    "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj": {
+    "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj",
+        "projectUniqueName": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
         "projectName": "GOMVC",
-        "projectPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj",
+        "projectPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
         "packagesPath": "C:\\Users\\Go Credit\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\obj\\",
+        "outputPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Go Credit\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -42,6 +42,32 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "Microsoft.EntityFrameworkCore.Design": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "Microsoft.EntityFrameworkCore.Tools": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.0.10, )"
+            },
+            "MySql.Data": {
+              "target": "Package",
+              "version": "[9.1.0, )"
+            },
+            "Pomelo.EntityFrameworkCore.MySql": {
+              "target": "Package",
+              "version": "[8.0.2, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",

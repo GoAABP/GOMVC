@@ -9,39 +9,47 @@ build_property.EnforceExtendedAnalyzerRules =
 build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property.RootNamespace = GOMVC
 build_property.RootNamespace = GOMVC
-build_property.ProjectDir = C:\Users\Go Credit\Documents\GOMVC\GOMVC\
+build_property.ProjectDir = C:\Users\Go Credit\Documents\GOMVC\gomvc\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.RazorLangVersion = 8.0
 build_property.SupportLocalizedComponentNames = 
 build_property.GenerateRazorMetadataSourceChecksumAttributes = 
-build_property.MSBuildProjectDirectory = C:\Users\Go Credit\Documents\GOMVC\GOMVC
+build_property.MSBuildProjectDirectory = C:\Users\Go Credit\Documents\GOMVC\gomvc
 build_property._RazorSourceGeneratorDebug = 
 
-[C:/Users/Go Credit/Documents/GOMVC/GOMVC/Views/Home/Index.cshtml]
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Home/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Go Credit/Documents/GOMVC/GOMVC/Views/Home/Privacy.cshtml]
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Home/Privacy.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Go Credit/Documents/GOMVC/GOMVC/Views/Shared/Error.cshtml]
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/SaldosPruebas/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2FsZG9zUHJ1ZWJhc1xJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Saldos_Cartera/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2FsZG9zX0NhcnRlcmFcSW5kZXguY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Shared/Error.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXEVycm9yLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Go Credit/Documents/GOMVC/GOMVC/Views/Shared/_ValidationScriptsPartial.cshtml]
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Shared/_ValidationScriptsPartial.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Go Credit/Documents/GOMVC/GOMVC/Views/_ViewImports.cshtml]
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/_ViewImports.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdJbXBvcnRzLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Go Credit/Documents/GOMVC/GOMVC/Views/_ViewStart.cshtml]
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/_ViewStart.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdTdGFydC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/Go Credit/Documents/GOMVC/GOMVC/Views/Shared/_Layout.cshtml]
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Shared/_Layout.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9MYXlvdXQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = b-9eozks2us4
