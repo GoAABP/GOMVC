@@ -6,13 +6,29 @@
 
 <h2>Saldos Cartera</h2>
 
+<!-- Filter Form -->
+<form method="get" asp-action="Index">
+    <div class="form-group">
+        <label for="idCredito">IdCredito</label>
+        <input type="number" class="form-control" id="idCredito" name="idCredito" value="@ViewData["IdCredito"]" />
+    </div>
+    <div class="form-group">
+        <label for="idPersona">IdPersona</label>
+        <input type="number" class="form-control" id="idPersona" name="idPersona" value="@ViewData["IdPersona"]" />
+    </div>
+    <div class="form-group">
+        <label for="nombre">Nombre</label>
+        <input type="text" class="form-control" id="nombre" name="nombre" value="@ViewData["Nombre"]" />
+    </div>
+    <button type="submit" class="btn btn-primary">Filter</button>
+</form>
+
 <!-- Data Table with Scrollbars -->
 <div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
 <!-- Data Table -->
 <table class="table">
     <thead>
         <tr>
-            <th>DBKEY</th>
             <th>IdSolicitud</th>
             <th>IdCredito</th>
             <th>IdPersona</th>
@@ -107,14 +123,12 @@
             <th>VCollectStatus</th>
             <th>NCAT</th>
             <th>VOpTable</th>
-            <th>FechaGenerado</th>
         </tr>
     </thead>
     <tbody>
         @foreach (var item in Model.SaldosCartera)
         {
             <tr>
-                <td>@item.DBKEY</td>
                 <td>@item.IdSolicitud</td>
                 <td>@item.IdCredito</td>
                 <td>@item.IdPersona</td>
@@ -209,7 +223,6 @@
                 <td>@item.VCollectStatus</td>
                 <td>@item.NCAT</td>
                 <td>@item.VOpTable</td>
-                <td>@item.FechaGenerado</td>
             </tr>
         }
     </tbody>
@@ -222,10 +235,10 @@
     Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
     @if (Model.PageNumber > 1)
     {
-        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize">Previous</a>
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Previous</a>
     }
     @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
     {
-        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize">Next</a>
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Next</a>
     }
 </div>
