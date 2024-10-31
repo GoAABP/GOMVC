@@ -6,19 +6,8 @@
 
 <h2>Saldos Cartera</h2>
 
-<!-- Pagination Controls -->
-<div>
-    Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
-    @if (Model.PageNumber > 1)
-    {
-        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize">Previous</a>
-    }
-    @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
-    {
-        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize">Next</a>
-    }
-</div>
-
+<!-- Data Table with Scrollbars -->
+<div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
 <!-- Data Table -->
 <table class="table">
     <thead>
@@ -225,8 +214,10 @@
         }
     </tbody>
 </table>
+</div>
 
-<!-- Pagination Controls -->
+
+<!-- Pagination Controls at the Bottom -->
 <div>
     Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
     @if (Model.PageNumber > 1)
