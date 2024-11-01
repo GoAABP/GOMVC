@@ -3,9 +3,11 @@ using GOMVC.Data;
 using GOMVC.Models;
 using System.Linq;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 
 namespace GOMVC.Controllers
 {
+    [Authorize]
     public class SaldosCarteraController : Controller
     {
         private readonly AppDbContext _context;
