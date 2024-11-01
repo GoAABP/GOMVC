@@ -40,7 +40,8 @@ namespace GOMVC.Controllers
                 var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
                 var authProperties = new AuthenticationProperties
                 {
-                    IsPersistent = true
+                    IsPersistent = true,
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30) // Set cookie to expire in 30 minutes
                 };
 
                 // Sign in the user
@@ -52,10 +53,11 @@ namespace GOMVC.Controllers
             else
             {
                 // Login failed
-                ViewData["ErrorMessage"] = "Invalid username or password.";
+                ViewData["ErrorMessage"] = "Invalid credentials.";
                 return View("Index");
             }
         }
+
 
         [HttpPost]
         public async Task<IActionResult> Logout()

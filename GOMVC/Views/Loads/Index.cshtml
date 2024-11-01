@@ -1,0 +1,13 @@
+@{
+    ViewData["Title"] = "Manual Load";
+}
+
+<h2>Manual Load</h2>
+
+<form asp-controller="Loads" asp-action="ManualLoad" method="post" enctype="multipart/form-data">
+    <div class="form-group">
+        <label for="file">Select a file to upload:</label>
+        <input type="file" name="file" class="form-control" />
+    </div>
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
