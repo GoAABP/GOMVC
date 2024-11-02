@@ -1,14 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using GOMVC.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Serilog;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddHostedService<ScheduledLoadService>();
-// Other service registrations
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .WriteTo.File("C:\\Users\\Go Credit\\Documents\\DATA\\LOGS\\app-.log", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 
 // Add services to the container.
+builder.Services.AddHostedService<ScheduledLoadService>();
 builder.Services.AddControllersWithViews();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -18,10 +25,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.LoginPath = "/User/Index"; // Redirect to login page if not authenticated
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(30); // Set default cookie expiration to 30 minutes
-
+        options.LoginPath = "/User/Index";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
     });
+
+// Configure file upload limits
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 104857600; // Set the limit to 100MB or as needed
+});
 
 var app = builder.Build();
 
@@ -37,7 +49,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseAuthentication(); // Add authentication middleware
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(

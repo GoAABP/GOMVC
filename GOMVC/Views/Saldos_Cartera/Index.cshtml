@@ -28,6 +28,12 @@
     <button type="submit" class="btn btn-secondary">Download Most Recent Data as CSV</button>
 </form>
 
+<form asp-action="DownloadDataByDate" method="post">
+    <label for="selectedDate">Select Date:</label>
+    <input type="date" id="selectedDate" name="selectedDate" required />
+    <button type="submit">Download CSV</button>
+</form>
+
 <!-- Data Table with Scrollbars -->
 <div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
 <!-- Data Table -->
