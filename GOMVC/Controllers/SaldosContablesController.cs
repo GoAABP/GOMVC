@@ -8,18 +8,18 @@ using Microsoft.AspNetCore.Authorization;
 namespace GOMVC.Controllers
 {
     [Authorize]
-    public class SaldosDiariosController : Controller
+    public class SaldosContablesController : Controller
     {
         private readonly AppDbContext _context;
 
-        public SaldosDiariosController(AppDbContext context)
+        public SaldosContablesController(AppDbContext context)
         {
             _context = context;
         }
 
         public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, string? referencia = null, string? nombre = null)
         {
-            var query = _context.Saldos_Diarios.AsQueryable();
+            var query = _context.Saldos_Contables.AsQueryable();
 
             // Apply filters
             if (idCredito.HasValue)
@@ -47,9 +47,9 @@ namespace GOMVC.Controllers
                 .Take(pageSize)
                 .ToList();
 
-            var viewModel = new SaldosDiariosViewModel
+            var viewModel = new SaldosContablesViewModel
             {
-                Saldos_Diarios = saldosDiarios,
+                Saldos_Contables = saldosDiarios,
                 PageNumber = pageNumber,
                 PageSize = pageSize,
                 TotalItems = totalItems
@@ -60,13 +60,13 @@ namespace GOMVC.Controllers
             ViewData["Referencia"] = referencia;
             ViewData["Nombre"] = nombre;
 
-            return View("~/Views/Saldos_Diarios/Index.cshtml", viewModel);
+            return View("~/Views/Saldos_Contables/Index.cshtml", viewModel);
         }
 
         // New action to download most recent data as CSV
         public IActionResult DownloadMostRecentData()
         {
-            var query = _context.Saldos_Diarios.AsQueryable();
+            var query = _context.Saldos_Contables.AsQueryable();
 
             // Get the most recent date
             var mostRecentDate = query.Max(s => s.FechaGenerado);
@@ -92,7 +92,7 @@ namespace GOMVC.Controllers
                 return BadRequest("Selected date is required.");
             }
 
-            var query = _context.Saldos_Diarios.AsQueryable();
+            var query = _context.Saldos_Contables.AsQueryable();
 
             // Get data for the selected date
             var dataForSelectedDate = query.Where(s => s.FechaGenerado.HasValue && s.FechaGenerado.Value.Date == selectedDate.Value.Date).ToList();

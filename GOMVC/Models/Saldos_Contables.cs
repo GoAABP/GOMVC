@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-public class Saldos_Diarios
+public class Saldos_Contables
 {
     [Key]
     public int DBKEY { get; set; }

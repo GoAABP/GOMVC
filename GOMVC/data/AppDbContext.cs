@@ -3,15 +3,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GOMVC.Data
 {
-    public class AppDbContext : DbContext
+    public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
     {
-        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
-
         public DbSet<Saldos_Cartera> Saldos_Cartera { get; set; }
-        public DbSet<Saldos_Diarios> Saldos_Diarios { get; set; }
+        public DbSet<Saldos_Contables> Saldos_Contables { get; set; }
 
         public DbSet<User> Users { get; set; }
-
-
+        public object? SaldosContables { get; internal set; }
     }
 }

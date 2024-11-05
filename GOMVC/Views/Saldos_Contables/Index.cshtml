@@ -1,10 +1,10 @@
-@model GOMVC.Models.SaldosDiariosViewModel
+@model GOMVC.Models.SaldosContablesViewModel
 
 @{
-    ViewData["Title"] = "Saldos Diarios";
+    ViewData["Title"] = "Saldos Contables";
 }
 
-<h2>Saldos Diarios</h2>
+<h2>Saldos Contables</h2>
 
 <!-- Filter Form -->
 <form method="get" asp-action="Index">
@@ -95,7 +95,7 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (var item in Model.Saldos_Diarios)
+            @foreach (var item in Model.Saldos_Contables)
             {
                 <tr>
                     <td>@item.DBKEY</td>
