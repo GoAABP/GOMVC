@@ -1,10 +1,15 @@
-using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GOMVC.Controllers
 {
     public class LoadsController : Controller
     {
+        public IActionResult Index()
+        {
+            return View();
+        }
+
         public IActionResult ExecuteBatchFile()
         {
             string batFilePath = @"C:\Users\Go Credit\Documents\DATA\BIN\BulkLoadSaldosCartera.bat";
