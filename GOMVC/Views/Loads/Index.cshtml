@@ -1,30 +1,9 @@
 @{
-    ViewData["Title"] = "Manual Load";
+    ViewData["Title"] = "Execute Batch File";
 }
 
-<h2>Manual Load</h2>
+<h2>Execute Batch File</h2>
 
-<form asp-controller="Loads" asp-action="ManualLoad" method="post" enctype="multipart/form-data">
-    <div class="form-group">
-        <label for="file">Select a file to upload:</label>
-        <input type="file" name="file" class="form-control" />
-    </div>
-    <button type="submit" class="btn btn-primary">Upload</button>
+<form method="post" asp-action="ExecuteBatchFile">
+    <button type="submit" class="btn btn-primary">Run Batch File</button>
 </form>
-
-@if (TempData["SuccessMessage"] != null)
-{
-    <div class="alert alert-success">
-        @TempData["SuccessMessage"]
-    </div>
-}
-
-@if (!ViewData.ModelState.IsValid)
-{
-    <div class="alert alert-danger">
-        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
-        {
-            <p>@error.ErrorMessage</p>
-        }
-    </div>
-}

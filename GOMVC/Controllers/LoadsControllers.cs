@@ -1,85 +1,37 @@
-using GOMVC.Data;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using MySql.Data.MySqlClient;
-using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 
-public class LoadsController : Controller
+namespace GOMVC.Controllers
 {
-    private readonly AppDbContext _context;
-    private readonly ILogger<LoadsController> _logger;
-
-    public LoadsController(AppDbContext context, ILogger<LoadsController> logger)
+    public class LoadsController : Controller
     {
-        _context = context;
-        _logger = logger;
-    }
-
-    [HttpGet]
-    public IActionResult Index()
-    {
-        return View();
-    }
-
-    [HttpPost]
-    public async Task<IActionResult> ManualLoad(IFormFile file)
-    {
-        if (file != null && file.Length > 0)
+        public IActionResult ExecuteBatchFile()
         {
-            var filePath = Path.GetTempFileName();
+            string batFilePath = @"C:\Users\Go Credit\Documents\DATA\BIN\BulkLoadSaldosCartera.bat";
+
             try
             {
-                // Save the uploaded file to a temporary location
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                ProcessStartInfo processInfo = new ProcessStartInfo(batFilePath)
                 {
-                    await file.CopyToAsync(stream);
-                }
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
 
-                // Execute MySQL bulk load query using LOAD DATA LOCAL INFILE
-                var connectionString = _context.Database.GetDbConnection().ConnectionString;
-                using (var connection = new MySqlConnection(connectionString))
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                using (Process process = Process.Start(processInfo))
                 {
-                    await connection.OpenAsync();
-                    var query = $"LOAD DATA LOCAL INFILE '{filePath.Replace("\\", "\\\\")}' " +
-                                "INTO TABLE Stage_Saldos_Cartera " +
-                                "FIELDS TERMINATED BY '|' " +
-                                "ENCLOSED BY '\"' " +
-                                "LINES TERMINATED BY '\n' " +
-                                "IGNORE 1 LINES;"; // Adjust as needed for your CSV format
-
-                    _logger.LogInformation("Executing query: {Query}", query);
-
-                    using (var command = new MySqlCommand(query, connection))
-                    {
-                        await command.ExecuteNonQueryAsync();
-                    }
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+                    process.WaitForExit();
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
                 }
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
 
-                _logger.LogInformation("File processed and data inserted successfully.");
-                TempData["SuccessMessage"] = "File processed and data inserted successfully.";
-                return RedirectToAction("Index");
+                return Ok("Batch file executed successfully.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An error occurred while processing the file.");
-                ModelState.AddModelError("", "An error occurred while processing the file. Please check the logs for more details.");
-            }
-            finally
-            {
-                // Clean up the temporary file
-                if (System.IO.File.Exists(filePath))
-                {
-                    System.IO.File.Delete(filePath);
-                }
+                return StatusCode(500, $"Error executing batch file: {ex.Message}");
             }
         }
-        else
-        {
-            ModelState.AddModelError("", "Please select a file to upload.");
-        }
-        return View("Index");
     }
 }

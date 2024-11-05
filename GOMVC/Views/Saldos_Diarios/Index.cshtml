@@ -1,0 +1,171 @@
+@model GOMVC.Models.SaldosDiariosViewModel
+
+@{
+    ViewData["Title"] = "Saldos Diarios";
+}
+
+<h2>Saldos Diarios</h2>
+
+<!-- Filter Form -->
+<form method="get" asp-action="Index">
+    <div class="form-group">
+        <label for="idCredito">Id_Credito</label>
+        <input type="number" class="form-control" id="idCredito" name="idCredito" value="@ViewData["IdCredito"]" />
+    </div>
+    <div class="form-group">
+        <label for="referencia">Referencia</label>
+        <input type="text" class="form-control" id="referencia" name="referencia" value="@ViewData["Referencia"]" />
+    </div>
+    <div class="form-group">
+        <label for="nombre">Nombre</label>
+        <input type="text" class="form-control" id="nombre" name="nombre" value="@ViewData["Nombre"]" />
+    </div>
+    <button type="submit" class="btn btn-primary">Filter</button>
+</form>
+
+<!-- Download Button -->
+<form method="get" asp-action="DownloadMostRecentData">
+    <button type="submit" class="btn btn-secondary">Download Most Recent Data as CSV</button>
+</form>
+
+<form asp-action="DownloadDataByDate" method="post">
+    <label for="selectedDate">Select Date:</label>
+    <input type="date" id="selectedDate" name="selectedDate" required />
+    <button type="submit">Download CSV</button>
+</form>
+
+<!-- Data Table with Scrollbars -->
+<div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
+    <table>
+        <thead>
+            <tr>
+                <th>DBKEY</th>
+                <th>Id_Credito</th>
+                <th>Referencia</th>
+                <th>Nombre</th>
+                <th>Id_Sucursal</th>
+                <th>Sucursal</th>
+                <th>Id_Convenio</th>
+                <th>Convenio</th>
+                <th>Financiamiento</th>
+                <th>Estatus_Inicial</th>
+                <th>Estatus_Final</th>
+                <th>Fecha_Apertura</th>
+                <th>Fecha_Terminacion</th>
+                <th>Importe</th>
+                <th>Dias_Atraso</th>
+                <th>Cuotas_Atrasadas</th>
+                <th>Periodos_Atraso</th>
+                <th>Pagos_Sostenidos</th>
+                <th>Pago</th>
+                <th>Frecuencia</th>
+                <th>Fecha_Ultimo_Pago</th>
+                <th>Importe_Ultimo_Pago</th>
+                <th>Saldo_Inicial_Capital</th>
+                <th>Otorgado</th>
+                <th>Pagos</th>
+                <th>Ajuste_Cargo_Capital</th>
+                <th>Ajuste_Abono_Capital</th>
+                <th>Saldo_Final_Capital</th>
+                <th>Calculo</th>
+                <th>Diferencia</th>
+                <th>Capital_Vigente</th>
+                <th>Capital_Vencido</th>
+                <th>Saldo_Inicial_Interes</th>
+                <th>Devengamiento</th>
+                <th>Pagos_Interes</th>
+                <th>Ajuste_Cargo_Interes</th>
+                <th>Ajuste_Abono_Interes</th>
+                <th>Interes_No_Devengado</th>
+                <th>Saldo_Final_Interes</th>
+                <th>Calculo_Interes</th>
+                <th>Diferencia_Interes</th>
+                <th>Interes_Devengado</th>
+                <th>IVA_Interes_Devengado</th>
+                <th>Interes_No_DevengadoB</th>
+                <th>Fecha_Cartera_Vencida</th>
+                <th>Saldo_Contable</th>
+                <th>Saldo_Insoluto</th>
+                <th>Porc_Provision</th>
+                <th>Reserva</th>
+                <th>nCAT</th>
+                <th>vOpTable</th>
+                <th>Status</th>
+                <th>FechaGenerado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Saldos_Diarios)
+            {
+                <tr>
+                    <td>@item.DBKEY</td>
+                    <td>@item.Id_Credito</td>
+                    <td>@item.Referencia</td>
+                    <td>@item.Nombre</td>
+                    <td>@item.Id_Sucursal</td>
+                    <td>@item.Sucursal</td>
+                    <td>@item.Id_Convenio</td>
+                    <td>@item.Convenio</td>
+                    <td>@item.Financiamiento</td>
+                    <td>@item.Estatus_Inicial</td>
+                    <td>@item.Estatus_Final</td>
+                    <td>@item.Fecha_Apertura</td>
+                    <td>@item.Fecha_Terminacion</td>
+                    <td>@item.Importe</td>
+                    <td>@item.Dias_Atraso</td>
+                    <td>@item.Cuotas_Atrasadas</td>
+                    <td>@item.Periodos_Atraso</td>
+                    <td>@item.Pagos_Sostenidos</td>
+                    <td>@item.Pago</td>
+                    <td>@item.Frecuencia</td>
+                    <td>@item.Fecha_Ultimo_Pago</td>
+                    <td>@item.Importe_Ultimo_Pago</td>
+                    <td>@item.Saldo_Inicial_Capital</td>
+                    <td>@item.Otorgado</td>
+                    <td>@item.Pagos</td>
+                    <td>@item.Ajuste_Cargo_Capital</td>
+                    <td>@item.Ajuste_Abono_Capital</td>
+                    <td>@item.Saldo_Final_Capital</td>
+                    <td>@item.Calculo</td>
+                    <td>@item.Diferencia</td>
+                    <td>@item.Capital_Vigente</td>
+                    <td>@item.Capital_Vencido</td>
+                    <td>@item.Saldo_Inicial_Interes</td>
+                    <td>@item.Devengamiento</td>
+                    <td>@item.Pagos_Interes</td>
+                    <td>@item.Ajuste_Cargo_Interes</td>
+                    <td>@item.Ajuste_Abono_Interes</td>
+                    <td>@item.Interes_No_Devengado</td>
+                    <td>@item.Saldo_Final_Interes</td>
+                    <td>@item.Calculo_Interes</td>
+                    <td>@item.Diferencia_Interes</td>
+                    <td>@item.Interes_Devengado</td>
+                    <td>@item.IVA_Interes_Devengado</td>
+                    <td>@item.Interes_No_DevengadoB</td>
+                    <td>@item.Fecha_Cartera_Vencida</td>
+                    <td>@item.Saldo_Contable</td>
+                    <td>@item.Saldo_Insoluto</td>
+                    <td>@item.Porc_Provision</td>
+                    <td>@item.Reserva</td>
+                    <td>@item.nCAT</td>
+                    <td>@item.vOpTable</td>
+                    <td>@item.Status</td>
+                    <td>@item.FechaGenerado</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination Controls at the Bottom -->
+<div>
+    Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+    @if (Model.PageNumber > 1)
+    {
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Previous</a>
+    }
+    @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+    {
+        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Next</a>
+    }
+</div>
