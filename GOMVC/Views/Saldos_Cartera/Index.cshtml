@@ -41,6 +41,9 @@
         </form>
 
         <form asp-action="DownloadCurrentSelection" method="post" class="mt-3">
+            <input type="hidden" name="idCredito" value="@ViewData["IdCredito"]" />
+            <input type="hidden" name="idPersona" value="@ViewData["IdPersona"]" />
+            <input type="hidden" name="nombre" value="@ViewData["Nombre"]" />
             <input type="hidden" name="selectedDate" value="@(ViewData["SelectedDate"] != null ? ((DateTime)ViewData["SelectedDate"]).ToString("yyyy-MM-dd") : string.Empty)" />
             <button type="submit" class="btn btn-secondary">Download Current Selection as CSV</button>
         </form>
