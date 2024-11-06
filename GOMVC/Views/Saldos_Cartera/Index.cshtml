@@ -6,249 +6,264 @@
 
 <h2>Saldos Cartera</h2>
 
-<!-- Filter Form -->
-<form method="get" asp-action="Index">
-    <div class="form-group">
-        <label for="idCredito">Id_Credito</label>
-        <input type="number" class="form-control" id="idCredito" name="idCredito" value="@ViewData["IdCredito"]" />
+<div class="row">
+    <div class="col-md-3">
+        <!-- Side Menu for Filters and Buttons -->
+        <form method="get" asp-action="Index">
+            <div class="form-group">
+                <label for="selectedDate">Select Date:</label>
+                <input type="date" class="form-control" id="selectedDate" name="selectedDate" value="@(ViewData["SelectedDate"] != null ? ((DateTime)ViewData["SelectedDate"]).ToString("yyyy-MM-dd") : string.Empty)" />
+            </div>
+            <div class="form-group">
+                <label for="idCredito">Id_Credito</label>
+                <input type="number" class="form-control" id="idCredito" name="idCredito" value="@ViewData["IdCredito"]" />
+            </div>
+            <div class="form-group">
+                <label for="idPersona">IdPersona</label>
+                <input type="number" class="form-control" id="idPersona" name="idPersona" value="@ViewData["IdPersona"]" />
+            </div>
+            <div class="form-group">
+                <label for="nombre">Nombre</label>
+                <input type="text" class="form-control" id="nombre" name="nombre" value="@ViewData["Nombre"]" />
+            </div>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="@Url.Action("Index", "SaldosCartera", new { clearFilters = true })" class="btn btn-secondary ml-2">Clear Filters</a>
+        </form>
+
+        <!-- Download Buttons -->
+        <form method="get" asp-action="DownloadMostRecentData">
+            <button type="submit" class="btn btn-secondary mt-3">Download Most Recent Data as CSV</button>
+        </form>
+
+        <form asp-action="DownloadDataByDate" method="post" class="mt-3">
+            <input type="hidden" name="selectedDate" value="@(ViewData["SelectedDate"] != null ? ((DateTime)ViewData["SelectedDate"]).ToString("yyyy-MM-dd") : string.Empty)" />
+            <button type="submit" class="btn btn-secondary">Download Selected Date as CSV</button>
+        </form>
+
+        <form asp-action="DownloadCurrentSelection" method="post" class="mt-3">
+            <input type="hidden" name="selectedDate" value="@(ViewData["SelectedDate"] != null ? ((DateTime)ViewData["SelectedDate"]).ToString("yyyy-MM-dd") : string.Empty)" />
+            <button type="submit" class="btn btn-secondary">Download Current Selection as CSV</button>
+        </form>
     </div>
-    <div class="form-group">
-        <label for="idPersona">IdPersona</label>
-        <input type="number" class="form-control" id="idPersona" name="idPersona" value="@ViewData["IdPersona"]" />
+
+    <div class="col-md-9">
+        <!-- Data Table with Scrollbars -->
+        <div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
+            <!-- Table content goes here -->
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Id_Solicitud</th>
+                        <th>Id_Credito</th>
+                        <th>IdPersona</th>
+                        <th>Referencia</th>
+                        <th>Afiliado</th>
+                        <th>Nombre</th>
+                        <th>Monto</th>
+                        <th>Comision</th>
+                        <th>Intereses_Totales</th>
+                        <th>Monto_Total</th>
+                        <th>Pagos</th>
+                        <th>Amort_Pagadas</th>
+                        <th>Capital_Pagado</th>
+                        <th>Interes_Pagado</th>
+                        <th>IVA_Int_Pagado</th>
+                        <th>Cargo_PTardio_Pagado</th>
+                        <th>Moratorio_Pagado</th>
+                        <th>Pago_en_Exceso</th>
+                        <th>Comision_Pagada</th>
+                        <th>Total_Pagado</th>
+                        <th>Ajustes_Capital</th>
+                        <th>Saldo_Capital</th>
+                        <th>Saldo_Interes</th>
+                        <th>Saldo_IVA_Int</th>
+                        <th>Saldo_Cargo_PTardio</th>
+                        <th>Saldo_Moratorios</th>
+                        <th>Saldo_Pago_Exceso</th>
+                        <th>Saldo_Comision</th>
+                        <th>Saldo_Total</th>
+                        <th>Importe_de_Pago</th>
+                        <th>Id_Convenio</th>
+                        <th>Dependencia</th>
+                        <th>Primer_Pago_Teorico</th>
+                        <th>Ultimo_Pago</th>
+                        <th>Tipo_Financiamiento</th>
+                        <th>Capital_Vigente</th>
+                        <th>Capital_Vencido</th>
+                        <th>Intereses_Vencidos</th>
+                        <th>Vencido</th>
+                        <th>Sdo_Insoluto</th>
+                        <th>Sdo_Total_c_ListasCobro</th>
+                        <th>Sdo_Vencido_c_ListCobro</th>
+                        <th>Estatus_Cartera</th>
+                        <th>Estatus</th>
+                        <th>Sucursal</th>
+                        <th>Fecha_Desembolso</th>
+                        <th>Frecuencia</th>
+                        <th>Primer_Pago_Real</th>
+                        <th>Ultimo_Pago_c_ListaCobro</th>
+                        <th>Ultimo_Pago_Aplicado</th>
+                        <th>Dias_Ultimo_Pago</th>
+                        <th>Dias_Atraso</th>
+                        <th>Cuotas_Atraso</th>
+                        <th>Periodos_Atraso</th>
+                        <th>Pago</th>
+                        <th>Monto_Ultimo_Pago</th>
+                        <th>Tasa_Int_Anual</th>
+                        <th>Gestor</th>
+                        <th>Motivo</th>
+                        <th>Banco</th>
+                        <th>Estado</th>
+                        <th>Ciudad</th>
+                        <th>Com_Vigente</th>
+                        <th>Com_Vencida</th>
+                        <th>Clabe</th>
+                        <th>Sig_Pago</th>
+                        <th>Monto_Sig_Pago</th>
+                        <th>vFondeador</th>
+                        <th>Valida_Domi</th>
+                        <th>vAfiliateIdO</th>
+                        <th>vAfiliateO</th>
+                        <th>Saldo_Retencion_Adm</th>
+                        <th>RFC</th>
+                        <th>vMotiveExt</th>
+                        <th>iPeriodsExt</th>
+                        <th>vCommentExt</th>
+                        <th>nRetencion</th>
+                        <th>nJoPay</th>
+                        <th>iMaxDays</th>
+                        <th>vMaxDate</th>
+                        <th>nLiquidate</th>
+                        <th>nLiqPrin</th>
+                        <th>nLiqInt</th>
+                        <th>nLiqMor</th>
+                        <th>nLiqCha</th>
+                        <th>nLiqPrinTran</th>
+                        <th>nLiqIntTran</th>
+                        <th>nLiqMorTran</th>
+                        <th>nLiqChaTran</th>
+                        <th>nLiqRetTran</th>
+                        <th>vScoreBuro</th>
+                        <th>vCollectStatus</th>
+                        <th>nCAT</th>
+                        <th>vOpTable</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.SaldosCartera)
+                    {
+                        <tr>
+                            <td>@item.Id_Solicitud</td>
+                            <td>@item.Id_Credito</td>
+                            <td>@item.IdPersona</td>
+                            <td>@item.Referencia</td>
+                            <td>@item.Afiliado</td>
+                            <td>@item.Nombre</td>
+                            <td>@item.Monto</td>
+                            <td>@item.Comision</td>
+                            <td>@item.Intereses_Totales</td>
+                            <td>@item.Monto_Total</td>
+                            <td>@item.Pagos</td>
+                            <td>@item.Amort_Pagadas</td>
+                            <td>@item.Capital_Pagado</td>
+                            <td>@item.Interes_Pagado</td>
+                            <td>@item.IVA_Int_Pagado</td>
+                            <td>@item.Cargo_PTardio_Pagado</td>
+                            <td>@item.Moratorio_Pagado</td>
+                            <td>@item.Pago_en_Exceso</td>
+                            <td>@item.Comision_Pagada</td>
+                            <td>@item.Total_Pagado</td>
+                            <td>@item.Ajustes_Capital</td>
+                            <td>@item.Saldo_Capital</td>
+                            <td>@item.Saldo_Interes</td>
+                            <td>@item.Saldo_IVA_Int</td>
+                            <td>@item.Saldo_Cargo_PTardio</td>
+                            <td>@item.Saldo_Moratorios</td>
+                            <td>@item.Saldo_Pago_Exceso</td>
+                            <td>@item.Saldo_Comision</td>
+                            <td>@item.Saldo_Total</td>
+                            <td>@item.Importe_de_Pago</td>
+                            <td>@item.Id_Convenio</td>
+                            <td>@item.Dependencia</td>
+                            <td>@item.Primer_Pago_Teorico</td>
+                            <td>@item.Ultimo_Pago</td>
+                            <td>@item.Tipo_Financiamiento</td>
+                            <td>@item.Capital_Vigente</td>
+                            <td>@item.Capital_Vencido</td>
+                            <td>@item.Intereses_Vencidos</td>
+                            <td>@item.Vencido</td>
+                            <td>@item.Sdo_Insoluto</td>
+                            <td>@item.Sdo_Total_c_ListasCobro</td>
+                            <td>@item.Sdo_Vencido_c_ListCobro</td>
+                            <td>@item.Estatus_Cartera</td>
+                            <td>@item.Estatus</td>
+                            <td>@item.Sucursal</td>
+                            <td>@item.Fecha_Desembolso</td>
+                            <td>@item.Frecuencia</td>
+                            <td>@item.Primer_Pago_Real</td>
+                            <td>@item.Ultimo_Pago_c_ListaCobro</td>
+                            <td>@item.Ultimo_Pago_Aplicado</td>
+                            <td>@item.Dias_Ultimo_Pago</td>
+                            <td>@item.Dias_Atraso</td>
+                            <td>@item.Cuotas_Atraso</td>
+                            <td>@item.Periodos_Atraso</td>
+                            <td>@item.Pago</td>
+                            <td>@item.Monto_Ultimo_Pago</td>
+                            <td>@item.Tasa_Int_Anual</td>
+                            <td>@item.Gestor</td>
+                            <td>@item.Motivo</td>
+                            <td>@item.Banco</td>
+                            <td>@item.Estado</td>
+                            <td>@item.Ciudad</td>
+                            <td>@item.Com_Vigente</td>
+                            <td>@item.Com_Vencida</td>
+                            <td>@item.Clabe</td>
+                            <td>@item.Sig_Pago</td>
+                            <td>@item.Monto_Sig_Pago</td>
+                            <td>@item.vFondeador</td>
+                            <td>@item.Valida_Domi</td>
+                            <td>@item.vAfiliateIdO</td>
+                            <td>@item.vAfiliateO</td>
+                            <td>@item.Saldo_Retencion_Adm</td>
+                            <td>@item.RFC</td>
+                            <td>@item.vMotiveExt</td>
+                            <td>@item.iPeriodsExt</td>
+                            <td>@item.vCommentExt</td>
+                            <td>@item.nRetencion</td>
+                            <td>@item.nJoPay</td>
+                            <td>@item.iMaxDays</td>
+                            <td>@item.vMaxDate</td>
+                            <td>@item.nLiquidate</td>
+                            <td>@item.nLiqPrin</td>
+                            <td>@item.nLiqInt</td>
+                            <td>@item.nLiqMor</td>
+                            <td>@item.nLiqCha</td>
+                            <td>@item.nLiqPrinTran</td>
+                            <td>@item.nLiqIntTran</td>
+                            <td>@item.nLiqMorTran</td>
+                            <td>@item.nLiqChaTran</td>
+                            <td>@item.nLiqRetTran</td>
+                            <td>@item.vScoreBuro</td>
+                            <td>@item.vCollectStatus</td>
+                            <td>@item.nCAT</td>
+                            <td>@item.vOpTable</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls at the Bottom -->
+        <div>
+            Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+            @if (Model.PageNumber > 1)
+            {
+                <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Previous</a>
+            }
+            @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+            {
+                <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Next</a>
+            }
+        </div>
     </div>
-    <div class="form-group">
-        <label for="nombre">Nombre</label>
-        <input type="text" class="form-control" id="nombre" name="nombre" value="@ViewData["Nombre"]" />
-    </div>
-    <button type="submit" class="btn btn-primary">Filter</button>
-</form>
-
-<!-- Download Button -->
-<form method="get" asp-action="DownloadMostRecentData">
-    <button type="submit" class="btn btn-secondary">Download Most Recent Data as CSV</button>
-</form>
-
-<form asp-action="DownloadDataByDate" method="post">
-    <label for="selectedDate">Select Date:</label>
-    <input type="date" id="selectedDate" name="selectedDate" required />
-    <button type="submit">Download CSV</button>
-</form>
-
-<!-- Data Table with Scrollbars -->
-<div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
-<!-- Data Table -->
-<table class="table">
-    <thead>
-        <tr>
-            <th>Id_Solicitud</th>
-            <th>Id_Credito</th>
-            <th>IdPersona</th>
-            <th>Referencia</th>
-            <th>Afiliado</th>
-            <th>Nombre</th>
-            <th>Monto</th>
-            <th>Comision</th>
-            <th>Intereses_Totales</th>
-            <th>Monto_Total</th>
-            <th>Pagos</th>
-            <th>Amort_Pagadas</th>
-            <th>Capital_Pagado</th>
-            <th>Interes_Pagado</th>
-            <th>IVA_Int_Pagado</th>
-            <th>Cargo_PTardio_Pagado</th>
-            <th>Moratorio_Pagado</th>
-            <th>Pago_en_Exceso</th>
-            <th>Comision_Pagada</th>
-            <th>Total_Pagado</th>
-            <th>Ajustes_Capital</th>
-            <th>Saldo_Capital</th>
-            <th>Saldo_Interes</th>
-            <th>Saldo_IVA_Int</th>
-            <th>Saldo_Cargo_PTardio</th>
-            <th>Saldo_Moratorios</th>
-            <th>Saldo_Pago_Exceso</th>
-            <th>Saldo_Comision</th>
-            <th>Saldo_Total</th>
-            <th>Importe_de_Pago</th>
-            <th>Id_Convenio</th>
-            <th>Dependencia</th>
-            <th>Primer_Pago_Teorico</th>
-            <th>Ultimo_Pago</th>
-            <th>Tipo_Financiamiento</th>
-            <th>Capital_Vigente</th>
-            <th>Capital_Vencido</th>
-            <th>Intereses_Vencidos</th>
-            <th>Vencido</th>
-            <th>Sdo_Insoluto</th>
-            <th>Sdo_Total_c_ListasCobro</th>
-            <th>Sdo_Vencido_c_ListCobro</th>
-            <th>Estatus_Cartera</th>
-            <th>Estatus</th>
-            <th>Sucursal</th>
-            <th>Fecha_Desembolso</th>
-            <th>Frecuencia</th>
-            <th>Primer_Pago_Real</th>
-            <th>Ultimo_Pago_c_ListaCobro</th>
-            <th>Ultimo_Pago_Aplicado</th>
-            <th>Dias_Ultimo_Pago</th>
-            <th>Dias_Atraso</th>
-            <th>Cuotas_Atraso</th>
-            <th>Periodos_Atraso</th>
-            <th>Pago</th>
-            <th>Monto_Ultimo_Pago</th>
-            <th>Tasa_Int_Anual</th>
-            <th>Gestor</th>
-            <th>Motivo</th>
-            <th>Banco</th>
-            <th>Estado</th>
-            <th>Ciudad</th>
-            <th>Com_Vigente</th>
-            <th>Com_Vencida</th>
-            <th>Clabe</th>
-            <th>Sig_Pago</th>
-            <th>Monto_Sig_Pago</th>
-            <th>vFondeador</th>
-            <th>Valida_Domi</th>
-            <th>vAfiliateIdO</th>
-            <th>vAfiliateO</th>
-            <th>Saldo_Retencion_Adm</th>
-            <th>RFC</th>
-            <th>vMotiveExt</th>
-            <th>iPeriodsExt</th>
-            <th>vCommentExt</th>
-            <th>nRetencion</th>
-            <th>nJoPay</th>
-            <th>iMaxDays</th>
-            <th>vMaxDate</th>
-            <th>nLiquidate</th>
-            <th>nLiqPrin</th>
-            <th>nLiqInt</th>
-            <th>nLiqMor</th>
-            <th>nLiqCha</th>
-            <th>nLiqPrinTran</th>
-            <th>nLiqIntTran</th>
-            <th>nLiqMorTran</th>
-            <th>nLiqChaTran</th>
-            <th>nLiqRetTran</th>
-            <th>vScoreBuro</th>
-            <th>vCollectStatus</th>
-            <th>nCAT</th>
-            <th>vOpTable</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var item in Model.SaldosCartera)
-        {
-            <tr>
-                <td>@item.Id_Solicitud</td>
-                <td>@item.Id_Credito</td>
-                <td>@item.IdPersona</td>
-                <td>@item.Referencia</td>
-                <td>@item.Afiliado</td>
-                <td>@item.Nombre</td>
-                <td>@item.Monto</td>
-                <td>@item.Comision</td>
-                <td>@item.Intereses_Totales</td>
-                <td>@item.Monto_Total</td>
-                <td>@item.Pagos</td>
-                <td>@item.Amort_Pagadas</td>
-                <td>@item.Capital_Pagado</td>
-                <td>@item.Interes_Pagado</td>
-                <td>@item.IVA_Int_Pagado</td>
-                <td>@item.Cargo_PTardio_Pagado</td>
-                <td>@item.Moratorio_Pagado</td>
-                <td>@item.Pago_en_Exceso</td>
-                <td>@item.Comision_Pagada</td>
-                <td>@item.Total_Pagado</td>
-                <td>@item.Ajustes_Capital</td>
-                <td>@item.Saldo_Capital</td>
-                <td>@item.Saldo_Interes</td>
-                <td>@item.Saldo_IVA_Int</td>
-                <td>@item.Saldo_Cargo_PTardio</td>
-                <td>@item.Saldo_Moratorios</td>
-                <td>@item.Saldo_Pago_Exceso</td>
-                <td>@item.Saldo_Comision</td>
-                <td>@item.Saldo_Total</td>
-                <td>@item.Importe_de_Pago</td>
-                <td>@item.Id_Convenio</td>
-                <td>@item.Dependencia</td>
-                <td>@item.Primer_Pago_Teorico</td>
-                <td>@item.Ultimo_Pago</td>
-                <td>@item.Tipo_Financiamiento</td>
-                <td>@item.Capital_Vigente</td>
-                <td>@item.Capital_Vencido</td>
-                <td>@item.Intereses_Vencidos</td>
-                <td>@item.Vencido</td>
-                <td>@item.Sdo_Insoluto</td>
-                <td>@item.Sdo_Total_c_ListasCobro</td>
-                <td>@item.Sdo_Vencido_c_ListCobro</td>
-                <td>@item.Estatus_Cartera</td>
-                <td>@item.Estatus</td>
-                <td>@item.Sucursal</td>
-                <td>@item.Fecha_Desembolso</td>
-                <td>@item.Frecuencia</td>
-                <td>@item.Primer_Pago_Real</td>
-                <td>@item.Ultimo_Pago_c_ListaCobro</td>
-                <td>@item.Ultimo_Pago_Aplicado</td>
-                <td>@item.Dias_Ultimo_Pago</td>
-                <td>@item.Dias_Atraso</td>
-                <td>@item.Cuotas_Atraso</td>
-                <td>@item.Periodos_Atraso</td>
-                <td>@item.Pago</td>
-                <td>@item.Monto_Ultimo_Pago</td>
-                <td>@item.Tasa_Int_Anual</td>
-                <td>@item.Gestor</td>
-                <td>@item.Motivo</td>
-                <td>@item.Banco</td>
-                <td>@item.Estado</td>
-                <td>@item.Ciudad</td>
-                <td>@item.Com_Vigente</td>
-                <td>@item.Com_Vencida</td>
-                <td>@item.Clabe</td>
-                <td>@item.Sig_Pago</td>
-                <td>@item.Monto_Sig_Pago</td>
-                <td>@item.vFondeador</td>
-                <td>@item.Valida_Domi</td>
-                <td>@item.vAfiliateIdO</td>
-                <td>@item.vAfiliateO</td>
-                <td>@item.Saldo_Retencion_Adm</td>
-                <td>@item.RFC</td>
-                <td>@item.vMotiveExt</td>
-                <td>@item.iPeriodsExt</td>
-                <td>@item.vCommentExt</td>
-                <td>@item.nRetencion</td>
-                <td>@item.nJoPay</td>
-                <td>@item.iMaxDays</td>
-                <td>@item.vMaxDate</td>
-                <td>@item.nLiquidate</td>
-                <td>@item.nLiqPrin</td>
-                <td>@item.nLiqInt</td>
-                <td>@item.nLiqMor</td>
-                <td>@item.nLiqCha</td>
-                <td>@item.nLiqPrinTran</td>
-                <td>@item.nLiqIntTran</td>
-                <td>@item.nLiqMorTran</td>
-                <td>@item.nLiqChaTran</td>
-                <td>@item.nLiqRetTran</td>
-                <td>@item.vScoreBuro</td>
-                <td>@item.vCollectStatus</td>
-                <td>@item.nCAT</td>
-                <td>@item.vOpTable</td>
-            </tr>
-        }
-    </tbody>
-</table>
-</div>
-
-<!-- Pagination Controls at the Bottom -->
-<div>
-    Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
-    @if (Model.PageNumber > 1)
-    {
-        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Previous</a>
-    }
-    @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
-    {
-        <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Next</a>
-    }
 </div>
