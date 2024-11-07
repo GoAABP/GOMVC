@@ -1,21 +1,21 @@
 @model GOMVC.Models.AplicacionPagosViewModel
 
 @{
-    ViewData["Title"] = "Aplicacion Pagos";
+    ViewData["Title"] = "Aplicación Pagos";
 }
 
-<h2>Aplicacion Pagos</h2>
+<h2>Aplicación Pagos</h2>
 
 <div class="row">
     <div class="col-md-3">
         <!-- Side Menu for Filters and Buttons -->
         <form method="get" asp-action="Index">
             <div class="form-group">
-                <label for="idPago">Id Pago</label>
+                <label for="idPago">Id_Pago</label>
                 <input type="number" class="form-control" id="idPago" name="idPago" value="@ViewData["IdPago"]" />
             </div>
             <div class="form-group">
-                <label for="idCredito">Id Credito</label>
+                <label for="idCredito">Id_Credito</label>
                 <input type="number" class="form-control" id="idCredito" name="idCredito" value="@ViewData["IdCredito"]" />
             </div>
             <div class="form-group">
@@ -23,7 +23,7 @@
                 <input type="text" class="form-control" id="nombreCliente" name="nombreCliente" value="@ViewData["NombreCliente"]" />
             </div>
             <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="@Url.Action("Index", "SaldosCartera", new { clearFilters = true })" class="btn btn-secondary ml-2">Clear Filters</a>
+            <a href="@Url.Action("Index", "AplicacionPagos", new { clearFilters = true })" class="btn btn-secondary ml-2">Clear Filters</a>
         </form>
 
         <!-- Download Buttons -->
@@ -45,9 +45,9 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>Id Pago</th>
-                        <th>Id Credito</th>
-                        <th>Id Convenio</th>
+                        <th>Id_Pago</th>
+                        <th>Id_Credito</th>
+                        <th>Id_Convenio</th>
                         <th>Convenio</th>
                         <th>Referencia</th>
                         <th>Nombre Cliente</th>
@@ -62,62 +62,62 @@
                         <th>Interes</th>
                         <th>IVA Int</th>
                         <th>Comision Financiada</th>
-                        <th>IVA Comision Financ.</th>
+                        <th>IVA Comision Financiada</th>
                         <th>Moratorios</th>
                         <th>IVA Mora</th>
                         <th>Pago Tardio</th>
-                        <th>IVA PagoTardio</th>
+                        <th>IVA Pago Tardio</th>
                         <th>Recuperacion</th>
-                        <th>IVA Recup</th>
-                        <th>Com. Liquidacion</th>
-                        <th>IVA Com. Liquidacion</th>
+                        <th>IVA Recuperacion</th>
+                        <th>Com Liquidacion</th>
+                        <th>IVA Com Liquidacion</th>
                         <th>Retencion X Admon</th>
                         <th>IVA Retencion X Admon</th>
                         <th>Pago Exceso</th>
                         <th>Gestor</th>
-                        <th>Forma de pago</th>
+                        <th>Forma de Pago</th>
                         <th>vMotive</th>
                     </tr>
                 </thead>
                 <tbody>
-                @foreach (var item in Model.Aplicacion_Pagos)
-                {
-                    <tr>
-                        <td>@item.Id_Pago</td>
-                        <td>@item.Id_Credito</td>
-                        <td>@item.Id_Convenio</td>
-                        <td>@item.Convenio</td>
-                        <td>@item.Referencia</td>
-                        <td>@item.Nombre_Cliente</td>
-                        <td>@item.Financiamiento</td>
-                        <td>@item.Origen_de_Movimiento</td>
-                        <td>@item.Fecha_Pago</td>
-                        <td>@item.Fecha_Aplicacion</td>
-                        <td>@item.Fecha_Deposito</td>
-                        <td>@item.Status</td>
-                        <td>@item.Pago</td>
-                        <td>@item.Capital</td>
-                        <td>@item.Interes</td>
-                        <td>@item.IVA_Int</td>
-                        <td>@item.Comision_Financiada</td>
-                        <td>@item.IVA_Comision_Financ</td>
-                        <td>@item.Moratorios</td>
-                        <td>@item.IVA_Mora</td>
-                        <td>@item.Pago_Tardio</td>
-                        <td>@item.IVA_PagoTardio</td>
-                        <td>@item.Recuperacion</td>
-                        <td>@item.IVA_Recup</td>
-                        <td>@item.Com_Liquidacion</td>
-                        <td>@item.IVA_Com_Liquidacion</td>
-                        <td>@item.Retencion_X_Admon</td>
-                        <td>@item.IVA_Retencion_X_Admon</td>
-                        <td>@item.Pago_Exceso</td>
-                        <td>@item.Gestor</td>
-                        <td>@item.Forma_de_pago</td>
-                        <td>@item.vMotive</td>
-                    </tr>
-                }
-            </tbody>
+                    @foreach (var item in Model.Aplicacion_Pagos)
+                    {
+                        <tr>
+                            <td>@item.Id_Pago</td>
+                            <td>@item.Id_Credito</td>
+                            <td>@item.Id_Convenio</td>
+                            <td>@item.Convenio</td>
+                            <td>@item.Referencia</td>
+                            <td>@item.Nombre_Cliente</td>
+                            <td>@item.Financiamiento</td>
+                            <td>@item.Origen_de_Movimiento</td>
+                            <td>@item.Fecha_Pago?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.Fecha_Aplicacion?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.Fecha_Deposito?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.Status</td>
+                            <td>@item.Pago</td>
+                            <td>@item.Capital</td>
+                            <td>@item.Interes</td>
+                            <td>@item.IVA_Int</td>
+                            <td>@item.Comision_Financiada</td>
+                            <td>@item.IVA_Comision_Financ</td>
+                            <td>@item.Moratorios</td>
+                            <td>@item.IVA_Mora</td>
+                            <td>@item.Pago_Tardio</td>
+                            <td>@item.IVA_PagoTardio</td>
+                            <td>@item.Recuperacion</td>
+                            <td>@item.IVA_Recup</td>
+                            <td>@item.Com_Liquidacion</td>
+                            <td>@item.IVA_Com_Liquidacion</td>
+                            <td>@item.Retencion_X_Admon</td>
+                            <td>@item.IVA_Retencion_X_Admon</td>
+                            <td>@item.Pago_Exceso</td>
+                            <td>@item.Gestor</td>
+                            <td>@item.Forma_de_pago</td>
+                            <td>@item.vMotive</td>
+                        </tr>
+                    }
+                </tbody>
             </table>
         </div>
 

@@ -14,9 +14,9 @@ namespace GOMVC.Models
         public string? Nombre_Cliente { get; set; }
         public string? Financiamiento { get; set; }
         public string? Origen_de_Movimiento { get; set; }
-        public string? Fecha_Pago { get; set; }
-        public string? Fecha_Aplicacion { get; set; }
-        public string? Fecha_Deposito { get; set; }
+        public DateTime? Fecha_Pago { get; set; }
+        public DateTime? Fecha_Aplicacion { get; set; }
+        public DateTime? Fecha_Deposito { get; set; }
         public string? Status { get; set; }
         public decimal? Pago { get; set; }
         public decimal? Capital { get; set; }
