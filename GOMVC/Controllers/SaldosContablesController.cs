@@ -18,57 +18,57 @@ namespace GOMVC.Controllers
         }
 
         public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, int? idSucursal = null, string? nombre = null, DateTime? selectedDate = null, bool clearFilters = false)
+{
+        var query = _context.Saldos_Contables.AsQueryable();
+
+        // Get the most recent date if no date is selected and the date picker is not cleared
+        if (!selectedDate.HasValue && !clearFilters && !Request.Query.ContainsKey("selectedDate"))
         {
-            var query = _context.Saldos_Contables.AsQueryable();
-
-            // Get the most recent date if no date is selected and the date picker is not cleared
-            if (!selectedDate.HasValue && !clearFilters && !Request.Query.ContainsKey("selectedDate"))
-            {
-                selectedDate = query.Max(s => s.FechaGenerado);
-            }
-
-            // Apply filters
-            if (idCredito.HasValue)
-            {
-                query = query.Where(s => s.Id_Credito == idCredito.Value);
-            }
-            if (idSucursal.HasValue)
-            {
-                query = query.Where(s => s.Id_Sucursal == idSucursal.Value);
-            }
-            if (!string.IsNullOrEmpty(nombre))
-            {
-                query = query.Where(s => s.Nombre.Contains(nombre));
-            }
-
-            // Apply date filter if selected
-            if (selectedDate.HasValue)
-            {
-                query = query.Where(s => s.FechaGenerado.HasValue && s.FechaGenerado.Value.Date == selectedDate.Value.Date);
-            }
-
-            var totalItems = query.Count();
-            var saldosContables = query
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
-
-            var viewModel = new SaldosContablesViewModel
-            {
-                Saldos_Contables = saldosContables,
-                PageNumber = pageNumber,
-                PageSize = pageSize,
-                TotalItems = totalItems
-            };
-
-            // Pass filter values to the view
-            ViewData["IdCredito"] = idCredito;
-            ViewData["IdSucursal"] = idSucursal;
-            ViewData["Nombre"] = nombre;
-            ViewData["SelectedDate"] = selectedDate;
-
-            return View("~/Views/Saldos_Contables/Index.cshtml", viewModel);
+            selectedDate = query.Max(s => s.FechaGenerado);
         }
+
+        // Apply filters
+        if (idCredito.HasValue)
+        {
+            query = query.Where(s => s.Id_Credito.ToString().Contains(idCredito.Value.ToString()));
+        }
+        if (idSucursal.HasValue)
+        {
+            query = query.Where(s => s.Id_Sucursal.ToString().Contains(idSucursal.Value.ToString()));
+        }
+        if (!string.IsNullOrEmpty(nombre))
+        {
+            query = query.Where(s => s.Nombre.Contains(nombre));
+        }
+
+        // Apply date filter if selected
+        if (selectedDate.HasValue)
+        {
+            query = query.Where(s => s.FechaGenerado.HasValue && s.FechaGenerado.Value.Date == selectedDate.Value.Date);
+        }
+
+        var totalItems = query.Count();
+        var saldosContables = query
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        var viewModel = new SaldosContablesViewModel
+        {
+            Saldos_Contables = saldosContables,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            TotalItems = totalItems
+        };
+
+        // Pass filter values to the view
+        ViewData["IdCredito"] = idCredito;
+        ViewData["IdSucursal"] = idSucursal;
+        ViewData["Nombre"] = nombre;
+        ViewData["SelectedDate"] = selectedDate;
+
+        return View("~/Views/Saldos_Contables/Index.cshtml", viewModel);
+    }
 
         public IActionResult DownloadMostRecentData()
         {
