@@ -17,12 +17,12 @@ namespace GOMVC.Controllers
             _context = context;
         }
 
-        public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, int? idSucursal = null, string? nombre = null, DateTime? selectedDate = null)
+        public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, int? idSucursal = null, string? nombre = null, DateTime? selectedDate = null, bool clearFilters = false)
         {
             var query = _context.Saldos_Contables.AsQueryable();
 
             // Get the most recent date if no date is selected and the date picker is not cleared
-            if (!selectedDate.HasValue && !Request.Query.ContainsKey("selectedDate"))
+            if (!selectedDate.HasValue && !clearFilters && !Request.Query.ContainsKey("selectedDate"))
             {
                 selectedDate = query.Max(s => s.FechaGenerado);
             }
@@ -69,6 +69,7 @@ namespace GOMVC.Controllers
 
             return View("~/Views/Saldos_Contables/Index.cshtml", viewModel);
         }
+
         public IActionResult DownloadMostRecentData()
         {
             var query = _context.Saldos_Contables.AsQueryable();

@@ -55,7 +55,6 @@
             <table>
                 <thead>
                     <tr>
-                        <th>DBKEY</th>
                         <th>Id_Credito</th>
                         <th>Referencia</th>
                         <th>Nombre</th>
@@ -107,14 +106,12 @@
                         <th>nCAT</th>
                         <th>vOpTable</th>
                         <th>Status</th>
-                        <th>FechaGenerado</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var item in Model.Saldos_Contables)
                     {
                         <tr>
-                            <td>@item.DBKEY</td>
                             <td>@item.Id_Credito</td>
                             <td>@item.Referencia</td>
                             <td>@item.Nombre</td>
@@ -166,13 +163,11 @@
                             <td>@item.nCAT</td>
                             <td>@item.vOpTable</td>
                             <td>@item.Status</td>
-                            <td>@item.FechaGenerado</td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
-    </div>
     
         <!-- Pagination Controls at the Bottom -->
         <div>

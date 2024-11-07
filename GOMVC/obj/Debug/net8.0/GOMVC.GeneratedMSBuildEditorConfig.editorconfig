@@ -18,6 +18,10 @@ build_property.GenerateRazorMetadataSourceChecksumAttributes =
 build_property.MSBuildProjectDirectory = C:\Users\Go Credit\Documents\GOMVC\gomvc
 build_property._RazorSourceGeneratorDebug = 
 
+[C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Aplicacion_Pagos/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcQXBsaWNhY2lvbl9QYWdvc1xJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/Go Credit/Documents/GOMVC/gomvc/Views/Home/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 

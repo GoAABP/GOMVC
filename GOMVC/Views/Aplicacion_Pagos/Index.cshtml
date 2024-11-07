@@ -1,0 +1,137 @@
+@model GOMVC.Models.AplicacionPagosViewModel
+
+@{
+    ViewData["Title"] = "Aplicacion Pagos";
+}
+
+<h2>Aplicacion Pagos</h2>
+
+<div class="row">
+    <div class="col-md-3">
+        <!-- Side Menu for Filters and Buttons -->
+        <form method="get" asp-action="Index">
+            <div class="form-group">
+                <label for="idPago">Id Pago</label>
+                <input type="number" class="form-control" id="idPago" name="idPago" value="@ViewData["IdPago"]" />
+            </div>
+            <div class="form-group">
+                <label for="idCredito">Id Credito</label>
+                <input type="number" class="form-control" id="idCredito" name="idCredito" value="@ViewData["IdCredito"]" />
+            </div>
+            <div class="form-group">
+                <label for="nombreCliente">Nombre Cliente</label>
+                <input type="text" class="form-control" id="nombreCliente" name="nombreCliente" value="@ViewData["NombreCliente"]" />
+            </div>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="@Url.Action("Index", "SaldosCartera", new { clearFilters = true })" class="btn btn-secondary ml-2">Clear Filters</a>
+        </form>
+
+        <!-- Download Buttons -->
+        <form method="get" asp-action="DownloadAll">
+            <button type="submit" class="btn btn-secondary mt-3">Download All Data as CSV</button>
+        </form>
+
+        <form asp-action="DownloadCurrentSelection" method="post" class="mt-3">
+            <input type="hidden" name="idPago" value="@ViewData["IdPago"]" />
+            <input type="hidden" name="idCredito" value="@ViewData["IdCredito"]" />
+            <input type="hidden" name="nombreCliente" value="@ViewData["NombreCliente"]" />
+            <button type="submit" class="btn btn-secondary">Download Current Selection as CSV</button>
+        </form>
+    </div>
+
+    <div class="col-md-9">
+        <!-- Data Table with Scrollbars -->
+        <div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Id Pago</th>
+                        <th>Id Credito</th>
+                        <th>Id Convenio</th>
+                        <th>Convenio</th>
+                        <th>Referencia</th>
+                        <th>Nombre Cliente</th>
+                        <th>Financiamiento</th>
+                        <th>Origen de Movimiento</th>
+                        <th>Fecha Pago</th>
+                        <th>Fecha Aplicacion</th>
+                        <th>Fecha Deposito</th>
+                        <th>Status</th>
+                        <th>Pago</th>
+                        <th>Capital</th>
+                        <th>Interes</th>
+                        <th>IVA Int</th>
+                        <th>Comision Financiada</th>
+                        <th>IVA Comision Financ.</th>
+                        <th>Moratorios</th>
+                        <th>IVA Mora</th>
+                        <th>Pago Tardio</th>
+                        <th>IVA PagoTardio</th>
+                        <th>Recuperacion</th>
+                        <th>IVA Recup</th>
+                        <th>Com. Liquidacion</th>
+                        <th>IVA Com. Liquidacion</th>
+                        <th>Retencion X Admon</th>
+                        <th>IVA Retencion X Admon</th>
+                        <th>Pago Exceso</th>
+                        <th>Gestor</th>
+                        <th>Forma de pago</th>
+                        <th>vMotive</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Aplicacion_Pagos)
+                {
+                    <tr>
+                        <td>@item.Id_Pago</td>
+                        <td>@item.Id_Credito</td>
+                        <td>@item.Id_Convenio</td>
+                        <td>@item.Convenio</td>
+                        <td>@item.Referencia</td>
+                        <td>@item.Nombre_Cliente</td>
+                        <td>@item.Financiamiento</td>
+                        <td>@item.Origen_de_Movimiento</td>
+                        <td>@item.Fecha_Pago</td>
+                        <td>@item.Fecha_Aplicacion</td>
+                        <td>@item.Fecha_Deposito</td>
+                        <td>@item.Status</td>
+                        <td>@item.Pago</td>
+                        <td>@item.Capital</td>
+                        <td>@item.Interes</td>
+                        <td>@item.IVA_Int</td>
+                        <td>@item.Comision_Financiada</td>
+                        <td>@item.IVA_Comision_Financ</td>
+                        <td>@item.Moratorios</td>
+                        <td>@item.IVA_Mora</td>
+                        <td>@item.Pago_Tardio</td>
+                        <td>@item.IVA_PagoTardio</td>
+                        <td>@item.Recuperacion</td>
+                        <td>@item.IVA_Recup</td>
+                        <td>@item.Com_Liquidacion</td>
+                        <td>@item.IVA_Com_Liquidacion</td>
+                        <td>@item.Retencion_X_Admon</td>
+                        <td>@item.IVA_Retencion_X_Admon</td>
+                        <td>@item.Pago_Exceso</td>
+                        <td>@item.Gestor</td>
+                        <td>@item.Forma_de_pago</td>
+                        <td>@item.vMotive</td>
+                    </tr>
+                }
+            </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls at the Bottom -->
+        <div>
+            Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+            @if (Model.PageNumber > 1)
+            {
+                <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Previous</a>
+            }
+            @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+            {
+                <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Next</a>
+            }
+        </div>
+    </div>
+</div>
