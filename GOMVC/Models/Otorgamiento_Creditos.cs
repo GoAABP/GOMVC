@@ -5,11 +5,10 @@ namespace GOMVC.Models
 {
     public class Otorgamiento_Creditos
     {
-        [Key]
         public int Id_Credito { get; set; }
 
         [StringLength(50)]
-        public string Referencia { get; set; }
+        public string? Referencia { get; set; }
 
         [StringLength(100)]
         public string Nombre { get; set; }

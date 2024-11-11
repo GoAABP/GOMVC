@@ -1,0 +1,98 @@
+@model GOMVC.Models.GestionesViewModel
+
+@{
+    ViewData["Title"] = "Gestiones";
+}
+
+<h2>Gestiones</h2>
+
+<div class="row">
+    <div class="col-md-3">
+        <!-- Side Menu for Filters and Buttons -->
+        <form method="get" asp-action="Index">
+            <div class="form-group">
+                <label for="idCredito">Id_Credito</label>
+                <input type="number" class="form-control" id="idCredito" name="idCredito" value="@ViewData["IdCredito"]" />
+            </div>
+            <div class="form-group">
+                <label for="usuarioRegistro">Usuario Registro</label>
+                <input type="text" class="form-control" id="usuarioRegistro" name="usuarioRegistro" value="@ViewData["UsuarioRegistro"]" />
+            </div>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="@Url.Action("Index", "Gestiones", new { clearFilters = true })" class="btn btn-secondary ml-2">Clear Filters</a>
+        </form>
+
+        <!-- Download Buttons -->
+        <form method="get" asp-action="DownloadAll">
+            <button type="submit" class="btn btn-secondary mt-3">Download All Data as CSV</button>
+        </form>
+
+        <form asp-action="DownloadCurrentSelection" method="post" class="mt-3">
+            <input type="hidden" name="idCredito" value="@ViewData["IdCredito"]" />
+            <input type="hidden" name="usuarioRegistro" value="@ViewData["UsuarioRegistro"]" />
+            <button type="submit" class="btn btn-secondary">Download Current Selection as CSV</button>
+        </form>
+    </div>
+
+    <div class="col-md-9">
+        <!-- Data Table with Scrollbars -->
+        <div style="overflow-x: auto; overflow-y: auto; max-height: 400px;">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Indice</th>
+                        <th>Credito</th>
+                        <th>Fecha Actividad</th>
+                        <th>Usuario Registro</th>
+                        <th>Fecha Promesa</th>
+                        <th>Monto Promesa</th>
+                        <th>Resultado</th>
+                        <th>Causa No Pago</th>
+                        <th>Codigo Accion</th>
+                        <th>Comentarios</th>
+                        <th>Producto</th>
+                        <th>Origen</th>
+                        <th>Causa No Domiciliacion</th>
+                        <th>Contacto Generado</th>
+                        <th>Coordenadas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Gestiones)
+                    {
+                        <tr>
+                            <td>@item.Indice</td>
+                            <td>@item.Credito</td>
+                            <td>@item.FechaActividad.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>@item.UsuarioRegistro</td>
+                            <td>@item.FechaPromesa?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.MontoPromesa</td>
+                            <td>@item.Resultado</td>
+                            <td>@item.CausaNoPago</td>
+                            <td>@item.CodigoAccion</td>
+                            <td>@item.Comentarios</td>
+                            <td>@item.Producto</td>
+                            <td>@item.Origen</td>
+                            <td>@item.CausaNoDomiciliacion</td>
+                            <td>@item.ContactoGenerado</td>
+                            <td>@item.Coordenadas</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls at the Bottom -->
+        <div>
+            Page @(Model.PageNumber) of @((Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+            @if (Model.PageNumber > 1)
+            {
+                <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber - 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Previous</a>
+            }
+            @if (Model.PageNumber < (Model.TotalItems + Model.PageSize - 1) / Model.PageSize)
+            {
+                <a asp-action="Index" asp-route-pageNumber="@(Model.PageNumber + 1)" asp-route-pageSize="@Model.PageSize" class="btn btn-secondary">Next</a>
+            }
+        </div>
+    </div>
+</div>
