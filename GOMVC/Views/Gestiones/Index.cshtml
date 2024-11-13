@@ -40,7 +40,7 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
-                        <th>Indice</th>
+                        <th>Agencia Registro</th>
                         <th>Credito</th>
                         <th>Fecha Actividad</th>
                         <th>Usuario Registro</th>
@@ -55,13 +55,16 @@
                         <th>Causa No Domiciliacion</th>
                         <th>Contacto Generado</th>
                         <th>Coordenadas</th>
+                        <th>Telefono</th>
+                        <th>Tipo Pago</th>
+                        <th>Estatus Promesa</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var item in Model.Gestiones)
                     {
                         <tr>
-                            <td>@item.Indice</td>
+                            <td>@item.AgenciaRegistro</td>
                             <td>@item.Credito</td>
                             <td>@item.FechaActividad.ToString("yyyy-MM-dd HH:mm:ss")</td>
                             <td>@item.UsuarioRegistro</td>
@@ -76,6 +79,9 @@
                             <td>@item.CausaNoDomiciliacion</td>
                             <td>@item.ContactoGenerado</td>
                             <td>@item.Coordenadas</td>
+                            <td>@item.Telefono</td>
+                            <td>@item.TipoPago</td>
+                            <td>@item.EstatusPromesa</td>
                         </tr>
                     }
                 </tbody>

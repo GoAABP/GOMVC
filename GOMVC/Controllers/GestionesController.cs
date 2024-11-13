@@ -17,7 +17,7 @@ namespace GOMVC.Controllers
             _context = context;
         }
 
-        public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, string? usuarioRegistro = null, bool clearFilters = false)
+       public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, string? usuarioRegistro = null, bool clearFilters = false)
         {
             var query = _context.Gestiones.AsQueryable();
 
@@ -61,15 +61,15 @@ namespace GOMVC.Controllers
             return View("~/Views/Gestiones/Index.cshtml", viewModel);
         }
 
-        public IActionResult DownloadAll()
+       public IActionResult DownloadAll()
         {
             var data = _context.Gestiones.ToList();
             var csv = new StringBuilder();
-            csv.AppendLine("Indice,Credito,FechaActividad,UsuarioRegistro,FechaPromesa,MontoPromesa,Resultado,CausaNoPago,CodigoAccion,Comentarios,Producto,Origen,CausaNoDomiciliacion,ContactoGenerado,Coordenadas");
+            csv.AppendLine("Indice,AgenciaRegistro,Credito,FechaActividad,UsuarioRegistro,FechaPromesa,MontoPromesa,Resultado,CausaNoPago,CodigoAccion,Comentarios,Producto,Origen,CausaNoDomiciliacion,ContactoGenerado,Coordenadas,Telefono,TipoPago,EstatusPromesa");
 
             foreach (var item in data)
             {
-                csv.AppendLine($"{item.Indice},{item.Credito},{item.FechaActividad},{item.UsuarioRegistro},{item.FechaPromesa},{item.MontoPromesa},{item.Resultado},{item.CausaNoPago},{item.CodigoAccion},{item.Comentarios},{item.Producto},{item.Origen},{item.CausaNoDomiciliacion},{item.ContactoGenerado},{item.Coordenadas}");
+                csv.AppendLine($"{item.AgenciaRegistro},{item.Credito},{item.FechaActividad},{item.UsuarioRegistro},{item.FechaPromesa},{item.MontoPromesa},{item.Resultado},{item.CausaNoPago},{item.CodigoAccion},{item.Comentarios},{item.Producto},{item.Origen},{item.CausaNoDomiciliacion},{item.ContactoGenerado},{item.Coordenadas},{item.Telefono},{item.TipoPago},{item.EstatusPromesa}");
             }
 
             var fileName = "Gestiones_AllData.csv";
@@ -94,11 +94,11 @@ namespace GOMVC.Controllers
 
             var data = query.ToList();
             var csv = new StringBuilder();
-            csv.AppendLine("Indice,Credito,FechaActividad,UsuarioRegistro,FechaPromesa,MontoPromesa,Resultado,CausaNoPago,CodigoAccion,Comentarios,Producto,Origen,CausaNoDomiciliacion,ContactoGenerado,Coordenadas");
+            csv.AppendLine("Indice,AgenciaRegistro,Credito,FechaActividad,UsuarioRegistro,FechaPromesa,MontoPromesa,Resultado,CausaNoPago,CodigoAccion,Comentarios,Producto,Origen,CausaNoDomiciliacion,ContactoGenerado,Coordenadas,Telefono,TipoPago,EstatusPromesa");
 
             foreach (var item in data)
             {
-                csv.AppendLine($"{item.Indice},{item.Credito},{item.FechaActividad},{item.UsuarioRegistro},{item.FechaPromesa},{item.MontoPromesa},{item.Resultado},{item.CausaNoPago},{item.CodigoAccion},{item.Comentarios},{item.Producto},{item.Origen},{item.CausaNoDomiciliacion},{item.ContactoGenerado},{item.Coordenadas}");
+                csv.AppendLine($"{item.AgenciaRegistro},{item.Credito},{item.FechaActividad},{item.UsuarioRegistro},{item.FechaPromesa},{item.MontoPromesa},{item.Resultado},{item.CausaNoPago},{item.CodigoAccion},{item.Comentarios},{item.Producto},{item.Origen},{item.CausaNoDomiciliacion},{item.ContactoGenerado},{item.Coordenadas},{item.Telefono},{item.TipoPago},{item.EstatusPromesa}");
             }
 
             var fileName = $"Gestiones_CurrentSelection_{DateTime.Now:yyyyMMdd}.csv";
