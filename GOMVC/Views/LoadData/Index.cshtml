@@ -1,0 +1,20 @@
+@model List<string>
+
+@{
+    ViewData["Title"] = "Load Data";
+}
+
+<h2>Load Data</h2>
+
+<form asp-action="HandleActivity" asp-controller="LoadData" method="post">
+    <div class="form-group">
+        <label for="activityName">Select Activity</label>
+        <select id="activityName" name="activityName" class="form-control">
+            @foreach (var activity in Model)
+            {
+                <option value="@activity">@activity</option>
+            }
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Execute</button>
+</form>

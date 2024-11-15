@@ -14,6 +14,7 @@ namespace GOMVC.Models
         public string ContactoGenerado { get; set; }
         public string? Coordenadas { get; set; }
         public int Credito { get; set; }
+        public string? EstatusPromesa { get; set; }
         public DateTime FechaActividad { get; set; }
         public DateTime? FechaPromesa { get; set; }
         public decimal? MontoPromesa { get; set; }
@@ -23,6 +24,5 @@ namespace GOMVC.Models
         public string? Telefono { get; set; }
         public string? TipoPago { get; set; }
         public string UsuarioRegistro { get; set; }
-        public string? EstatusPromesa { get; set; }
     }
 }

@@ -41,23 +41,24 @@
                 <thead>
                     <tr>
                         <th>Agencia Registro</th>
-                        <th>Credito</th>
-                        <th>Fecha Actividad</th>
-                        <th>Usuario Registro</th>
-                        <th>Fecha Promesa</th>
-                        <th>Monto Promesa</th>
-                        <th>Resultado</th>
                         <th>Causa No Pago</th>
-                        <th>Codigo Accion</th>
-                        <th>Comentarios</th>
-                        <th>Producto</th>
-                        <th>Origen</th>
                         <th>Causa No Domiciliacion</th>
+                        <th>Codigo Accion</th>
+                        <th>Codigo Resultado</th>
+                        <th>Comentarios</th>
                         <th>Contacto Generado</th>
                         <th>Coordenadas</th>
+                        <th>Credito</th>
+                        <th>Estatus Promesa</th>
+                        <th>Fecha Actividad</th>
+                        <th>Fecha Promesa</th>
+                        <th>Monto Promesa</th>
+                        <th>Origen</th>
+                        <th>Producto</th>
+                        <th>Resultado</th>
                         <th>Telefono</th>
                         <th>Tipo Pago</th>
-                        <th>Estatus Promesa</th>
+                        <th>Usuario Registro</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -65,23 +66,24 @@
                     {
                         <tr>
                             <td>@item.AgenciaRegistro</td>
-                            <td>@item.Credito</td>
-                            <td>@item.FechaActividad.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                            <td>@item.UsuarioRegistro</td>
-                            <td>@item.FechaPromesa?.ToString("yyyy-MM-dd")</td>
-                            <td>@item.MontoPromesa</td>
-                            <td>@item.Resultado</td>
                             <td>@item.CausaNoPago</td>
-                            <td>@item.CodigoAccion</td>
-                            <td>@item.Comentarios</td>
-                            <td>@item.Producto</td>
-                            <td>@item.Origen</td>
                             <td>@item.CausaNoDomiciliacion</td>
+                            <td>@item.CodigoAccion</td>
+                            <td>@item.CodigoResultado</td>
+                            <td>@item.Comentarios</td>
                             <td>@item.ContactoGenerado</td>
                             <td>@item.Coordenadas</td>
+                            <td>@item.Credito</td>
+                            <td>@item.EstatusPromesa</td>
+                            <td>@item.FechaActividad.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>@item.FechaPromesa?.ToString("yyyy-MM-dd")</td>
+                            <td>@item.MontoPromesa</td>
+                            <td>@item.Origen</td>
+                            <td>@item.Producto</td>
+                            <td>@item.Resultado</td>
                             <td>@item.Telefono</td>
                             <td>@item.TipoPago</td>
-                            <td>@item.EstatusPromesa</td>
+                            <td>@item.UsuarioRegistro</td>
                         </tr>
                     }
                 </tbody>

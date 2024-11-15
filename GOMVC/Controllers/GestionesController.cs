@@ -17,7 +17,7 @@ namespace GOMVC.Controllers
             _context = context;
         }
 
-       public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, string? usuarioRegistro = null, bool clearFilters = false)
+        public IActionResult Index(int pageNumber = 1, int pageSize = 100, int? idCredito = null, string? usuarioRegistro = null, bool clearFilters = false)
         {
             var query = _context.Gestiones.AsQueryable();
 
@@ -27,6 +27,7 @@ namespace GOMVC.Controllers
                 string idCreditoString = idCredito.Value.ToString();
                 query = query.Where(s => s.Credito.ToString().Contains(idCreditoString));
             }
+
             if (!string.IsNullOrEmpty(usuarioRegistro))
             {
                 query = query.Where(s => s.UsuarioRegistro.Contains(usuarioRegistro));
@@ -44,6 +45,9 @@ namespace GOMVC.Controllers
                 gestion.CausaNoPago = gestion.CausaNoPago ?? string.Empty;
                 gestion.CausaNoDomiciliacion = gestion.CausaNoDomiciliacion ?? string.Empty;
                 gestion.Coordenadas = gestion.Coordenadas ?? string.Empty;
+                gestion.EstatusPromesa = gestion.EstatusPromesa ?? string.Empty;
+                gestion.Telefono = gestion.Telefono ?? string.Empty;
+                gestion.TipoPago = gestion.TipoPago ?? string.Empty;
             }
 
             var viewModel = new GestionesViewModel
@@ -61,15 +65,17 @@ namespace GOMVC.Controllers
             return View("~/Views/Gestiones/Index.cshtml", viewModel);
         }
 
-       public IActionResult DownloadAll()
+        public IActionResult DownloadAll()
         {
             var data = _context.Gestiones.ToList();
             var csv = new StringBuilder();
-            csv.AppendLine("Indice,AgenciaRegistro,Credito,FechaActividad,UsuarioRegistro,FechaPromesa,MontoPromesa,Resultado,CausaNoPago,CodigoAccion,Comentarios,Producto,Origen,CausaNoDomiciliacion,ContactoGenerado,Coordenadas,Telefono,TipoPago,EstatusPromesa");
+
+            // Updated CSV header to match the Gestiones table order
+            csv.AppendLine("AgenciaRegistro,CausaNoPago,CausaNoDomiciliacion,CodigoAccion,CodigoResultado,Comentarios,ContactoGenerado,Coordenadas,Credito,EstatusPromesa,FechaActividad,FechaPromesa,MontoPromesa,Origen,Producto,Resultado,Telefono,TipoPago,UsuarioRegistro");
 
             foreach (var item in data)
             {
-                csv.AppendLine($"{item.AgenciaRegistro},{item.Credito},{item.FechaActividad},{item.UsuarioRegistro},{item.FechaPromesa},{item.MontoPromesa},{item.Resultado},{item.CausaNoPago},{item.CodigoAccion},{item.Comentarios},{item.Producto},{item.Origen},{item.CausaNoDomiciliacion},{item.ContactoGenerado},{item.Coordenadas},{item.Telefono},{item.TipoPago},{item.EstatusPromesa}");
+                csv.AppendLine($"{item.AgenciaRegistro},{item.CausaNoPago},{item.CausaNoDomiciliacion},{item.CodigoAccion},{item.CodigoResultado},{item.Comentarios},{item.ContactoGenerado},{item.Coordenadas},{item.Credito},{item.EstatusPromesa},{item.FechaActividad},{item.FechaPromesa},{item.MontoPromesa},{item.Origen},{item.Producto},{item.Resultado},{item.Telefono},{item.TipoPago},{item.UsuarioRegistro}");
             }
 
             var fileName = "Gestiones_AllData.csv";
@@ -87,6 +93,7 @@ namespace GOMVC.Controllers
                 string idCreditoString = idCredito.Value.ToString();
                 query = query.Where(s => s.Credito.ToString().Contains(idCreditoString));
             }
+
             if (!string.IsNullOrEmpty(usuarioRegistro))
             {
                 query = query.Where(s => s.UsuarioRegistro.Contains(usuarioRegistro));
@@ -94,11 +101,13 @@ namespace GOMVC.Controllers
 
             var data = query.ToList();
             var csv = new StringBuilder();
-            csv.AppendLine("Indice,AgenciaRegistro,Credito,FechaActividad,UsuarioRegistro,FechaPromesa,MontoPromesa,Resultado,CausaNoPago,CodigoAccion,Comentarios,Producto,Origen,CausaNoDomiciliacion,ContactoGenerado,Coordenadas,Telefono,TipoPago,EstatusPromesa");
+
+            // Updated CSV header to match the Gestiones table order
+            csv.AppendLine("AgenciaRegistro,CausaNoPago,CausaNoDomiciliacion,CodigoAccion,CodigoResultado,Comentarios,ContactoGenerado,Coordenadas,Credito,EstatusPromesa,FechaActividad,FechaPromesa,MontoPromesa,Origen,Producto,Resultado,Telefono,TipoPago,UsuarioRegistro");
 
             foreach (var item in data)
             {
-                csv.AppendLine($"{item.AgenciaRegistro},{item.Credito},{item.FechaActividad},{item.UsuarioRegistro},{item.FechaPromesa},{item.MontoPromesa},{item.Resultado},{item.CausaNoPago},{item.CodigoAccion},{item.Comentarios},{item.Producto},{item.Origen},{item.CausaNoDomiciliacion},{item.ContactoGenerado},{item.Coordenadas},{item.Telefono},{item.TipoPago},{item.EstatusPromesa}");
+                csv.AppendLine($"{item.AgenciaRegistro},{item.CausaNoPago},{item.CausaNoDomiciliacion},{item.CodigoAccion},{item.CodigoResultado},{item.Comentarios},{item.ContactoGenerado},{item.Coordenadas},{item.Credito},{item.EstatusPromesa},{item.FechaActividad},{item.FechaPromesa},{item.MontoPromesa},{item.Origen},{item.Producto},{item.Resultado},{item.Telefono},{item.TipoPago},{item.UsuarioRegistro}");
             }
 
             var fileName = $"Gestiones_CurrentSelection_{DateTime.Now:yyyyMMdd}.csv";
