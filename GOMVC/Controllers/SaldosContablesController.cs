@@ -34,11 +34,15 @@ namespace GOMVC.Controllers
         }
         if (idSucursal.HasValue)
         {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
             query = query.Where(s => s.Id_Sucursal.ToString().Contains(idSucursal.Value.ToString()));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
         }
         if (!string.IsNullOrEmpty(nombre))
         {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
             query = query.Where(s => s.Nombre.Contains(nombre));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
         }
 
         // Apply date filter if selected
@@ -127,7 +131,9 @@ namespace GOMVC.Controllers
             }
             if (!string.IsNullOrEmpty(nombre))
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Nombre.Contains(nombre));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
 
             // Apply date filter if selected

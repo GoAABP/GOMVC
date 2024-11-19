@@ -29,15 +29,21 @@ namespace GOMVC.Controllers
             // Apply filters
             if (idCredito.HasValue)
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Id_Credito.ToString().Contains(idCredito.Value.ToString()));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
             if (idPersona.HasValue)
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.IdPersona.ToString().Contains(idPersona.Value.ToString()));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
             if (!string.IsNullOrEmpty(nombre))
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Nombre.Contains(nombre));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
 
             // Apply date filter if selected
@@ -117,15 +123,21 @@ namespace GOMVC.Controllers
             // Apply filters
             if (idCredito.HasValue)
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Id_Credito.ToString().Contains(idCredito.Value.ToString()));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
             if (idPersona.HasValue)
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.IdPersona.ToString().Contains(idPersona.Value.ToString()));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
             if (!string.IsNullOrEmpty(nombre))
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Nombre.Contains(nombre));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
 
             // Apply date filter if selected

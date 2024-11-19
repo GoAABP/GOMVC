@@ -1,0 +1,13 @@
+2024-11-19 13:48:56 - Starting Process9FormulateDependencia.
+SQL File Path: C:\Users\Go Credit\Documents\DATA\SQL\FormulateDependencia.sql
+SQL Command: -- Insert new entries into Dependencia table
+INSERT INTO Dependencia (Dependencia)
+SELECT DISTINCT sc.Dependencia
+FROM Saldos_Cartera sc
+LEFT JOIN Dependencia d
+ON sc.Dependencia = d.Dependencia
+WHERE d.Dependencia IS NULL;
+2024-11-19 13:48:56 - SQL file executed. Rows affected: 221.
+2024-11-19 13:48:57 - Email alert sent.
+2024-11-19 13:48:57 - Transaction committed.
+2024-11-19 13:48:57 - Process9FormulateDependencia completed.

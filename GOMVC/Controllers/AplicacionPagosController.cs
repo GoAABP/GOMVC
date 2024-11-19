@@ -29,11 +29,15 @@ namespace GOMVC.Controllers
             if (idCredito.HasValue)
             {
                 string idCreditoString = idCredito.Value.ToString();
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Id_Credito.ToString().Contains(idCreditoString));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
             if (!string.IsNullOrEmpty(nombreCliente))
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Nombre_Cliente.Contains(nombreCliente));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
 
             var totalItems = query.Count();
@@ -88,11 +92,15 @@ namespace GOMVC.Controllers
             if (idCredito.HasValue)
             {
                 string idCreditoString = idCredito.Value.ToString();
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Id_Credito.ToString().Contains(idCreditoString));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
             if (!string.IsNullOrEmpty(nombreCliente))
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 query = query.Where(s => s.Nombre_Cliente.Contains(nombreCliente));
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
 
             var data = query.ToList();
