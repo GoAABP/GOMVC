@@ -10,6 +10,12 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+using System.Net.Mail;
+using System.Net;
+using MimeKit;
+using MailKit.Security;
+using MailKit;
 
 public class LoadDataController : Controller
 {
@@ -41,35 +47,30 @@ public class LoadDataController : Controller
             "5-ActivityFive",
             "6-ActivitySix",
             "7-Juicios",
-            "8-ActivityEight"
+            "8-ActivityEight",
+            "9-FormulateDependencia" // Added new method
         };
         return View(activities);
     }
 
-    [HttpPost("HandleActivity")]
+     [HttpPost("HandleActivity")]
     public async Task<IActionResult> HandleActivity(string activityName)
     {
         try
         {
-            await _semaphore.WaitAsync();
-            try
+            switch (activityName.ToLower())
             {
-                switch (activityName.ToLower())
-                {
-                    case "7-juicios":
-                        await Process7Juicios();
-                        break;
-                    // Add cases for other activities here
-                    default:
-                        _logger.LogError($"Unknown activity: {activityName}");
-                        return BadRequest("Unknown activity.");
-                }
+                case "7-juicios":
+                    await Process7Juicios();
+                    break;
+                case "9-formulatedependencia": // Added new case
+                    await Process9FormulateDependencia();
+                    break;
+                // Add cases for other activities here
+                default:
+                    _logger.LogError($"Unknown activity: {activityName}");
+                    return BadRequest("Unknown activity.");
             }
-            finally
-            {
-                _semaphore.Release();
-            }
-
             _logger.LogInformation("File processed successfully.");
             return Ok("File processed successfully.");
         }
@@ -80,17 +81,16 @@ public class LoadDataController : Controller
         }
     }
 
+
     private async Task Process7Juicios()
     {
         var logBuilder = new StringBuilder();
         var todayDate = DateTime.Now.ToString("yyyy-MM-dd");
         var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
-
         logBuilder.AppendLine(startLog);
         _logger.LogInformation(startLog);
 
         var files = Directory.GetFiles(_filePath, "Re_Juicios_*.xlsx");
-
         if (files.Length == 0)
         {
             var errorLog = "File not found.";
@@ -102,12 +102,11 @@ public class LoadDataController : Controller
 
         var file = files[0]; // Assuming you want to process the first matching file
         logBuilder.AppendLine("File found.");
-
         try
         {
             var textFilePath = Convert7JuiciosExcelToText(file, logBuilder);
             await BulkInsert7JuiciosData(textFilePath, logBuilder);
-            await ExecuteSqlFile("C:\\Users\\Go Credit\\Documents\\DATA\\SQL\\InsertJuicios.sql", logBuilder);
+            await ExecuteSqlFile(@"C:\Users\Go Credit\Documents\DATA\SQL\InsertJuicios.sql", logBuilder);
             MoveFilesToHistoric(file, textFilePath, logBuilder);
         }
         catch (Exception ex)
@@ -128,13 +127,11 @@ public class LoadDataController : Controller
     {
         var textFilePath = Path.ChangeExtension(excelFilePath, ".txt");
         var sb = new StringBuilder();
-
         using (var package = new ExcelPackage(new FileInfo(excelFilePath)))
         {
             var worksheet = package.Workbook.Worksheets.First();
             var rowCount = worksheet.Dimension.Rows;
             var colCount = worksheet.Dimension.Columns;
-
             for (int row = 2; row <= rowCount; row++)
             {
                 var rowValues = new List<string>();
@@ -156,7 +153,6 @@ public class LoadDataController : Controller
                 sb.AppendLine(string.Join("|", rowValues));
             }
         }
-
         System.IO.File.WriteAllText(textFilePath, sb.ToString());
         var logMessage = $"Converted Excel to text for 7-Juicios: {textFilePath}";
         logBuilder.AppendLine(logMessage);
@@ -171,7 +167,6 @@ public class LoadDataController : Controller
             "d 'de' MMMM 'de' yyyy H:mm", "d 'de' MMM 'de' yyyy H:mm", // Spanish formats with month names
             "d/M/yyyy", "M/d/yyyy", "d/M/yy", "M/d/yy" // Additional formats
         };
-
         var spanishCulture = new System.Globalization.CultureInfo("es-ES");
         if (DateTime.TryParseExact(input, formats, spanishCulture, System.Globalization.DateTimeStyles.None, out DateTime dateValue))
         {
@@ -179,7 +174,6 @@ public class LoadDataController : Controller
         }
         return input;
     }
-
 
     private async Task BulkInsert7JuiciosData(string textFilePath, StringBuilder logBuilder)
     {
@@ -197,13 +191,11 @@ public class LoadDataController : Controller
                     _logger.LogInformation(logMessage);
 
                     var loadCommandText = "LOAD DATA LOCAL INFILE '" + textFilePath.Replace("\\", "\\\\") + "' " +
-                                        "INTO TABLE stage_juicios " +
-                                        "CHARACTER SET utf8mb4 " +
-                                        "FIELDS TERMINATED BY '|' " +
-                                        "ENCLOSED BY '\"' " +
-                                        "LINES TERMINATED BY '\\n' " +
-                                        "IGNORE 1 LINES;";
-
+                                          "INTO TABLE stage_juicios " +
+                                          "FIELDS TERMINATED BY '|' " +
+                                          "ENCLOSED BY '\"' " +
+                                          "LINES TERMINATED BY '\\n' " +
+                                          "IGNORE 1 LINES;";
                     var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
                     await loadCommand.ExecuteNonQueryAsync();
                     logMessage = "Bulk inserted data into stage_juicios for 7-Juicios.";
@@ -227,7 +219,6 @@ public class LoadDataController : Controller
     private async Task ExecuteSqlFile(string sqlFilePath, StringBuilder logBuilder)
     {
         var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
-
         using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
@@ -240,7 +231,6 @@ public class LoadDataController : Controller
                     var logMessage = "Executed SQL file successfully.";
                     logBuilder.AppendLine(logMessage);
                     _logger.LogInformation(logMessage);
-
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
@@ -254,29 +244,27 @@ public class LoadDataController : Controller
             }
         }
     }
-
-
     private void MoveFilesToHistoric(string originalFilePath, string textFilePath, StringBuilder logBuilder)
     {
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        
+
         // Move original file
         var originalFileName = Path.GetFileNameWithoutExtension(originalFilePath);
         var originalExtension = Path.GetExtension(originalFilePath);
         var newOriginalFileName = $"{originalFileName}_{timestamp}{originalExtension}";
         var newOriginalFilePath = Path.Combine(_historicFilePath, newOriginalFileName);
-        
+
         System.IO.File.Move(originalFilePath, newOriginalFilePath);
         var logMessage = $"Moved original file to historic folder: {newOriginalFilePath}";
         logBuilder.AppendLine(logMessage);
         _logger.LogInformation(logMessage);
-        
+
         // Move converted file
         var textFileName = Path.GetFileNameWithoutExtension(textFilePath);
         var textExtension = Path.GetExtension(textFilePath);
         var newTextFileName = $"{textFileName}_{timestamp}{textExtension}";
         var newTextFilePath = Path.Combine(_historicFilePath, newTextFileName);
-        
+
         System.IO.File.Move(textFilePath, newTextFilePath);
         logMessage = $"Moved converted file to historic folder: {newTextFilePath}";
         logBuilder.AppendLine(logMessage);
@@ -287,12 +275,101 @@ public class LoadDataController : Controller
     {
         var logFilePath = _logPath;
         var historicLogFilePath = Path.Combine(_historicLogPath, $"BulkLoadJuicios_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
-
         if (System.IO.File.Exists(logFilePath))
         {
             System.IO.File.Move(logFilePath, historicLogFilePath);
         }
-
         await System.IO.File.WriteAllTextAsync(logFilePath, logContent);
+    }
+
+    private async Task Process9FormulateDependencia()
+    {
+        var logBuilder = new StringBuilder();
+        var sqlFilePath = @"C:\Users\Go Credit\Documents\DATA\SQL\FormulateDependencia.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
+
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process9FormulateDependencia.");
+        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
+        logBuilder.AppendLine($"SQL Command: {sql}");
+        _logger.LogInformation("Starting Process9FormulateDependencia.");
+        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
+        _logger.LogInformation($"SQL Command: {sql}");
+
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var command = new MySqlCommand(sql, connection, transaction);
+                    var affectedRows = await command.ExecuteNonQueryAsync();
+
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
+                    _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
+
+                    if (affectedRows >= 1)
+                    {
+                        SendEmailAlert("New dependencies have been added");
+                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
+                        _logger.LogInformation("Email alert sent.");
+                    }
+                    else
+                    {
+                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new dependencies added. No email sent.");
+                        _logger.LogInformation("No new dependencies added. No email sent.");
+                    }
+
+                    await transaction.CommitAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
+                    _logger.LogInformation("Transaction committed.");
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
+                    _logger.LogError(ex, "Error executing SQL file.");
+                    throw;
+                }
+            }
+        }
+
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process9FormulateDependencia completed.");
+        _logger.LogInformation("Process9FormulateDependencia completed.");
+
+        await WriteLog(logBuilder.ToString(), "FormulationDependencia");
+    }
+
+    private async Task WriteLog(string logContent, string logName)
+    {
+        var logFilePath = $@"C:\Users\Go Credit\Documents\DATA\LOGS\{logName}.log";
+        var historicLogFilePath = Path.Combine(_historicLogPath, $"{logName}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+        if (System.IO.File.Exists(logFilePath))
+        {
+            System.IO.File.Move(logFilePath, historicLogFilePath);
+        }
+        await System.IO.File.WriteAllTextAsync(logFilePath, logContent);
+    }
+    private async Task SendEmailAlert(string message)
+    {
+        var emailMessage = new MimeMessage();
+        emailMessage.From.Add(new MailboxAddress("Your Name", "gomvc.notice@gmail.com"));
+        emailMessage.To.Add(new MailboxAddress("Alfredo Bueno", "alfredo.bueno@gocredit.mx"));
+        emailMessage.Subject = "Alert: New Dependencies Added";
+        emailMessage.Body = new TextPart("plain")
+        {
+            Text = message
+        };
+
+        using (var client = new MailKit.Net.Smtp.SmtpClient())
+        {
+            await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls);
+
+            // Use the app password here
+            await client.AuthenticateAsync("gomvc.notice@gmail.com", "rnbn ugwd jwgu znav");
+
+            await client.SendAsync(emailMessage);
+            await client.DisconnectAsync(true);
+        }
     }
 }

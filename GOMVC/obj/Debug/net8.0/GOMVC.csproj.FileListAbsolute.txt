@@ -17,6 +17,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Humanizer.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\K4os.Compression.LZ4.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\K4os.Compression.LZ4.Streams.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\K4os.Hash.xxHash.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\MailKit.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.Internal.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Microsoft.AspNetCore.Cryptography.KeyDerivation.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
@@ -53,6 +54,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Microsoft.IdentityMode
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Microsoft.IO.RecyclableMemoryStream.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Microsoft.SqlServer.Server.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Microsoft.Win32.SystemEvents.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\MimeKit.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Mono.TextTemplating.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\MySql.Data.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\MySqlConnector.dll

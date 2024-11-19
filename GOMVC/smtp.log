@@ -1,0 +1,32 @@
+Connected to smtp://smtp.gmail.com:587/?starttls=always
+S: 220 smtp.gmail.com ESMTP 586e51a60fabf-296518c4ecfsm3583076fac.17 - gsmtp
+C: EHLO GoCre793BM34
+S: 250-smtp.gmail.com at your service, [187.251.235.141]
+S: 250-SIZE 35882577
+S: 250-8BITMIME
+S: 250-STARTTLS
+S: 250-ENHANCEDSTATUSCODES
+S: 250-PIPELINING
+S: 250-CHUNKING
+S: 250 SMTPUTF8
+C: STARTTLS
+S: 220 2.0.0 Ready to start TLS
+C: EHLO GoCre793BM34
+S: 250-smtp.gmail.com at your service, [187.251.235.141]
+S: 250-SIZE 35882577
+S: 250-8BITMIME
+S: 250-AUTH LOGIN PLAIN XOAUTH2 PLAIN-CLIENTTOKEN OAUTHBEARER XOAUTH
+S: 250-ENHANCEDSTATUSCODES
+S: 250-PIPELINING
+S: 250-CHUNKING
+S: 250 SMTPUTF8
+C: AUTH PLAIN ********
+S: 535-5.7.8 Username and Password not accepted. For more information, go to
+S: 535 5.7.8  https://support.google.com/mail/?p=BadCredentials 586e51a60fabf-296518c4ecfsm3583076fac.17 - gsmtp
+C: AUTH LOGIN
+S: 334 VXNlcm5hbWU6
+C: ********
+S: 334 UGFzc3dvcmQ6
+C: ********
+S: 535-5.7.8 Username and Password not accepted. For more information, go to
+S: 535 5.7.8  https://support.google.com/mail/?p=BadCredentials 586e51a60fabf-296518c4ecfsm3583076fac.17 - gsmtp

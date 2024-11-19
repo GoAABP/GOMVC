@@ -4,17 +4,79 @@
     ViewData["Title"] = "Load Data";
 }
 
-<h2>Load Data</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        .floating-message {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Load Data</h2>
 
-<form asp-action="HandleActivity" asp-controller="LoadData" method="post">
-    <div class="form-group">
-        <label for="activityName">Select Activity</label>
-        <select id="activityName" name="activityName" class="form-control">
-            @foreach (var activity in Model)
-            {
-                <option value="@activity">@activity</option>
-            }
-        </select>
-    </div>
-    <button type="submit" class="btn btn-primary">Execute</button>
-</form>
+    <form id="loadDataForm" asp-action="HandleActivity" asp-controller="LoadData" method="post">
+        <div class="form-group">
+            <label for="activityName">Select Activity</label>
+            <select id="activityName" name="activityName" class="form-control">
+                @foreach (var activity in Model)
+                {
+                    <option value="@activity">@activity</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Execute</button>
+    </form>
+
+    <div id="message" class="floating-message alert" role="alert"></div>
+
+    <script>
+        document.getElementById('loadDataForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            var form = event.target;
+            var formData = new FormData(form);
+            
+            fetch(form.action, {
+                method: form.method,
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.text().then(text => {
+                        showMessage('File processed successfully.', true);
+                    });
+                } else {
+                    return response.text().then(text => {
+                        showMessage('Error processing file: ' + text, false);
+                    });
+                }
+            })
+            .catch(error => {
+                showMessage('Error processing file: ' + error.message, false);
+            });
+        });
+
+        function showMessage(message, isSuccess) {
+            var messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.className = 'floating-message alert ' + (isSuccess ? 'alert-success' : 'alert-danger');
+            messageDiv.style.display = 'block';
+            
+            setTimeout(function() {
+                messageDiv.style.display = 'none';
+            }, 60000); // 60 seconds
+        }
+    </script>
+</body>
+</html>

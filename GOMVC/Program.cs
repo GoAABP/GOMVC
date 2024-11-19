@@ -3,6 +3,7 @@ using GOMVC.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Serilog;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
