@@ -16,6 +16,7 @@ using System.Net;
 using MimeKit;
 using MailKit.Security;
 using MailKit;
+using System.Diagnostics;
 
 public class LoadDataController : Controller
 {
@@ -36,21 +37,24 @@ public class LoadDataController : Controller
         _connectionString = _configuration.GetConnectionString("DefaultConnection");
 #pragma warning restore CS8601 // Possible null reference assignment.
     }
-
+    
     [HttpGet]
     public IActionResult Index()
     {
         var activities = new List<string>
         {
             "1-SaldosCartera",
-            "2-ActivityTwo",
-            "3-ActivityThree",
-            "4-ActivityFour",
+            "2-SaldosContables",
+            "3-OtorgamientoCreditos",
+            "4-Gestiones", // Added this line
             "5-ActivityFive",
             "6-ActivitySix",
             "7-Juicios",
             "8-ActivityEight",
-            "9-FormulateDependencia"
+            "9-FormulateDependencia",
+            "10-TipoFinanciamiento",
+            "11-Motivo",
+            "12-Catalogobancos"
         };
         return View(activities);
     }
@@ -65,11 +69,29 @@ public class LoadDataController : Controller
                 case "1-saldoscartera":
                     await Process1SaldosCartera();
                     break;
+                case "2-saldoscontables":
+                    await Process2SaldosContables();
+                    break;
+                case "3-otorgamientocreditos":
+                    await Process3OtorgamientoCreditos();
+                    break;
+                case "4-gestiones": // Added this case
+                    await Process4Gestiones();
+                    break;
                 case "7-juicios":
                     await Process7Juicios();
                     break;
                 case "9-formulatedependencia":
                     await Process9FormulateDependencia();
+                    break;
+                case "10-tipofinanciamiento":
+                    await Process10TipoFinanciamiento();
+                    break;
+                case "11-motivo":
+                    await Process11Motivo();
+                    break;
+                case "12-catalogobancos":
+                    await Process12CatalogoBancos();
                     break;
                 default:
                     _logger.LogError($"Unknown activity: {activityName}");
@@ -84,7 +106,7 @@ public class LoadDataController : Controller
             return StatusCode(500, "Internal server error.");
         }
     }
-
+    
     private async Task Process1SaldosCartera()
     {
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadSaldosCartera.log";
@@ -126,47 +148,61 @@ public class LoadDataController : Controller
 
     private async Task<string> Convert1SaldosCarteraCsvToText(string csvFilePath, StringBuilder logBuilder)
     {
+        // Register the code pages encoding provider
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
         var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
         var sb = new StringBuilder();
-
-        // Use StreamReader with UTF-8 encoding
-        using (var reader = new StreamReader(csvFilePath, Encoding.UTF8))
+        
+        try
         {
-            string line;
-            bool isFirstLine = true;
-            while ((line = await reader.ReadLineAsync()) != null)
+            // Use StreamReader with Windows-1252 encoding
+            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
             {
-                if (isFirstLine)
+                string line;
+                bool isFirstLine = true;
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    isFirstLine = false;
-                    continue; // Skip header
+                    if (isFirstLine)
+                    {
+                        isFirstLine = false;
+                        continue; // Skip header
+                    }
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    
+                    // Handle accents and other special characters
+                    var processedLine = line.Normalize(NormalizationForm.FormC);
+                    
+                    // Replace commas outside quotes with pipes
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
+                    
+                    // Convert date formats
+                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
+                    
+                    sb.AppendLine(processedLine);
                 }
-
-                if (string.IsNullOrWhiteSpace(line)) continue;
-
-                // Handle accents and other special characters
-                var processedLine = line.Normalize(NormalizationForm.FormC);
-
-                // Replace commas outside quotes with pipes
-                processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
-
-                // Convert date formats
-                processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
-
-                sb.AppendLine(processedLine);
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
+            
+            // Use StreamWriter with UTF-8 encoding to ensure the output file is in UTF-8
+            using (var writer = new StreamWriter(textFilePath, false, Encoding.UTF8))
+            {
+                await writer.WriteAsync(sb.ToString());
+            }
+            
+            var logMessage = $"Converted CSV to text for SaldosCartera: {textFilePath}";
+            logBuilder.AppendLine(logMessage);
+            _logger.LogInformation(logMessage);
         }
-
-        // Use StreamWriter with UTF-8 encoding
-        using (var writer = new StreamWriter(textFilePath, false, Encoding.UTF8))
+        catch (Exception ex)
         {
-            await writer.WriteAsync(sb.ToString());
+            var errorLog = $"Error during conversion: {ex.Message}";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(ex, errorLog);
+            throw;
         }
-
-        var logMessage = $"Converted CSV to text for SaldosCartera: {textFilePath}";
-        logBuilder.AppendLine(logMessage);
-        _logger.LogInformation(logMessage);
-
+        
         return textFilePath;
     }
     
@@ -286,6 +322,618 @@ public class LoadDataController : Controller
         }
     }
     
+    private async Task Process2SaldosContables()
+    {
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadSaldosContables.log";
+        var logBuilder = new StringBuilder();
+        var todayDate = DateTime.Now.ToString("yyyy-MM-dd");
+        var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
+        logBuilder.AppendLine(startLog);
+        _logger.LogInformation(startLog);
+
+        // Finding the CSV file
+        var files = System.IO.Directory.GetFiles(_filePath, "SDOSCONT*.CSV");
+        if (files.Length == 0)
+        {
+            var errorLog = "File not found.";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(errorLog);
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw new FileNotFoundException(errorLog);
+        }
+        var file = files[0]; // First file found
+        logBuilder.AppendLine("File found.");
+        try
+        {
+            // Convert CSV to text
+            var textFilePath = await Convert2SaldosContablesCsvToText(file, logBuilder);
+
+            // Bulk insert data
+            await BulkInsert2SaldosContablesData(textFilePath, logBuilder);
+
+            // Execute SQL insert
+            await Execute2SaldosContablesInsert(logBuilder, logPath);
+
+            // Move files to historic folder
+            MoveFilesToHistoric(file, textFilePath, logBuilder);
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error: {ex.Message}");
+            _logger.LogError(ex, "Error during processing.");
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw;
+        }
+        var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
+        logBuilder.AppendLine(endLog);
+        _logger.LogInformation(endLog);
+        await WriteLog(logBuilder.ToString(), logPath);
+    }
+
+    private async Task<string> Convert2SaldosContablesCsvToText(string csvFilePath, StringBuilder logBuilder)
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var textFilePath = System.IO.Path.ChangeExtension(csvFilePath, ".txt");
+        var sb = new StringBuilder();
+
+        try
+        {
+            using (var reader = new System.IO.StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
+            {
+                string line;
+                bool isFirstLine = true;
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (isFirstLine)
+                    {
+                        isFirstLine = false;
+                        continue; // Skip header
+                    }
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    var processedLine = line.Normalize(NormalizationForm.FormC);
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
+                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
+
+                    sb.AppendLine(processedLine);
+                }
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+            }
+
+            await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
+            logBuilder.AppendLine($"Converted CSV to text for SaldosContables: {textFilePath}");
+            _logger.LogInformation($"Converted CSV to text for SaldosContables: {textFilePath}");
+        }
+        catch (Exception ex)
+        {
+            var errorLog = $"Error during conversion: {ex.Message}";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(ex, errorLog);
+            throw;
+        }
+
+        return textFilePath;
+    }
+
+    private async Task BulkInsert2SaldosContablesData(string textFilePath, StringBuilder logBuilder)
+    {
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE stage_Saldos_Contables;", connection, transaction);
+                    await truncateCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Truncated table stage_Saldos_Contables.");
+                    _logger.LogInformation("Truncated table stage_Saldos_Contables.");
+
+                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' " +
+                                        "INTO TABLE stage_Saldos_Contables " +
+                                        "FIELDS TERMINATED BY '|' " +
+                                        "ENCLOSED BY '\"' " +
+                                        "LINES TERMINATED BY '\\n' " +
+                                        "IGNORE 1 LINES;";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Bulk inserted data into stage_Saldos_Contables.");
+                    _logger.LogInformation("Bulk inserted data into stage_Saldos_Contables.");
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error during bulk insert for SaldosContables: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task Execute2SaldosContablesInsert(StringBuilder logBuilder, string logPath)
+    {
+        var sqlFilePath = @"C:\Users\Go Credit\Documents\DATA\SQL\InsertSaldosContables.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    // Determine the current period
+                    var currentPeriod = GetCurrentPeriod();
+                    var todayDate = DateTime.Now.ToString("yyyy-MM-dd");
+
+                    // Check if a record with today's date and the current period already exists
+                    var checkCommandText = @"
+                    SELECT 1
+                    FROM Saldos_Contables
+                    WHERE DATE(FechaGenerado) = @TodayDate
+                    AND TIME(FechaGenerado) = @CurrentPeriod;";
+                    var checkCommand = new MySqlCommand(checkCommandText, connection, transaction);
+                    checkCommand.Parameters.AddWithValue("@TodayDate", todayDate);
+                    checkCommand.Parameters.AddWithValue("@CurrentPeriod", currentPeriod);
+                    var exists = await checkCommand.ExecuteScalarAsync() != null;
+                    if (exists)
+                    {
+                        var logMessage = "Validation failed: Record with today's date and current period already exists.";
+                        logBuilder.AppendLine(logMessage);
+                        _logger.LogInformation(logMessage);
+                        await WriteLog(logBuilder.ToString(), logPath);
+                        return; // Exit the method if the record exists
+                    }
+
+                    // Execute the SQL file
+                    var command = new MySqlCommand(sql, connection, transaction);
+                    command.Parameters.AddWithValue("@CurrentPeriod", currentPeriod);
+                    await command.ExecuteNonQueryAsync();
+                    var logMessageSuccess = "Executed SQL file successfully.";
+                    logBuilder.AppendLine(logMessageSuccess);
+                    _logger.LogInformation(logMessageSuccess);
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error executing SQL file: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    await WriteLog(logBuilder.ToString(), logPath);
+                    throw;
+                }
+            }
+        }
+    }
+    
+    private async Task Process3OtorgamientoCreditos()
+    {
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadOtorgamientoCreditos.log";
+        var logBuilder = new StringBuilder();
+        var todayDate = DateTime.Now.ToString("yyyy-MM-dd");
+        var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
+        logBuilder.AppendLine(startLog);
+        _logger.LogInformation(startLog);
+
+        var files = Directory.GetFiles(_filePath, "BARTURO*.csv");
+        if (files.Length == 0)
+        {
+            var errorLog = "File not found.";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(errorLog);
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw new FileNotFoundException(errorLog);
+        }
+
+        var file = files[0];
+        logBuilder.AppendLine("File found.");
+        try
+        {
+            var textFilePath = await Convert3OtorgamientoCreditosCsvToText(file, logBuilder);
+            await BulkInsert3OtorgamientoCreditosData(textFilePath, logBuilder);
+            await Execute3OtorgamientoCreditosInsert(logBuilder, logPath);
+            MoveFilesToHistoric(file, textFilePath, logBuilder);
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error: {ex.Message}");
+            _logger.LogError(ex, "Error during processing.");
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw;
+        }
+
+        var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
+        logBuilder.AppendLine(endLog);
+        _logger.LogInformation(endLog);
+        await WriteLog(logBuilder.ToString(), logPath);
+    }
+
+    private async Task<string> Convert3OtorgamientoCreditosCsvToText(string csvFilePath, StringBuilder logBuilder)
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
+        var sb = new StringBuilder();
+
+        try
+        {
+            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
+            {
+                string line;
+                bool isFirstLine = true;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (isFirstLine)
+                    {
+                        isFirstLine = false;
+                        continue; // Skip header
+                    }
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    var columns = line.Split(',');
+                    if (columns[0] == "0")
+                    {
+                        var errorLog = "Encountered 0 in the first column. Stopping processing.";
+                        logBuilder.AppendLine(errorLog);
+                        _logger.LogError(errorLog);
+                        break; // Stop processing further lines
+                    }
+
+                    var processedLine = line.Normalize(NormalizationForm.FormC);
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
+                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\\d{2})/(\\d{4})", "$3-$2-$1");
+
+                    sb.AppendLine(processedLine);
+                }
+            }
+
+            using (var writer = new StreamWriter(textFilePath, false, Encoding.UTF8))
+            {
+                await writer.WriteAsync(sb.ToString());
+            }
+
+            var logMessage = $"Converted CSV to text for OtorgamientoCreditos: {textFilePath}";
+            logBuilder.AppendLine(logMessage);
+            _logger.LogInformation(logMessage);
+        }
+        catch (Exception ex)
+        {
+            var errorLog = $"Error during conversion: {ex.Message}";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(ex, errorLog);
+            throw;
+        }
+
+        return textFilePath;
+    }
+
+    private async Task BulkInsert3OtorgamientoCreditosData(string textFilePath, StringBuilder logBuilder)
+    {
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE Stage_Otorgamiento_Creditos;", connection, transaction);
+                    await truncateCommand.ExecuteNonQueryAsync();
+                    var logMessage = "Truncated table Stage_Otorgamiento_Creditos.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' " +
+                                          "INTO TABLE Stage_Otorgamiento_Creditos " +
+                                          "FIELDS TERMINATED BY '|' " +
+                                          "ENCLOSED BY '\"' " +
+                                          "LINES TERMINATED BY '\\n' " +
+                                          "IGNORE 1 LINES;";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+                    logMessage = "Bulk inserted data into Stage_Otorgamiento_Creditos.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error during bulk insert for OtorgamientoCreditos: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task Execute3OtorgamientoCreditosInsert(StringBuilder logBuilder, string logPath)
+    {
+        var sqlFilePath = @"C:\Users\Go Credit\Documents\DATA\SQL\InsertOtorgamientoCreditos.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var command = new MySqlCommand(sql, connection, transaction);
+                    await command.ExecuteNonQueryAsync();
+                    var logMessage = "Executed SQL file successfully.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error executing SQL file: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    await WriteLog(logBuilder.ToString(), logPath);
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task Process4Gestiones()
+    {
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadGestiones.log";
+        var logBuilder = new StringBuilder();
+        var todayDate = DateTime.Now.ToString("yyyy-MM-dd");
+        var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
+        logBuilder.AppendLine(startLog);
+        _logger.LogInformation(startLog);
+
+        var files = Directory.GetFiles(_filePath, "Re_GestionesRO_*.xlsx");
+        if (files.Length == 0)
+        {
+            var errorLog = "File not found.";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(errorLog);
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw new FileNotFoundException(errorLog);
+        }
+        var file = files[0];
+        logBuilder.AppendLine("File found.");
+
+        try
+        {
+            var textFilePath = await Convert4GestionesExcelToText(file, logBuilder);
+            await BulkInsert4GestionesData(textFilePath, logBuilder);
+            await ExecuteInsert4Gestiones(logBuilder, logPath);
+            MoveFilesToHistoric(file, textFilePath, logBuilder);
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error: {ex.Message}");
+            _logger.LogError(ex, "Error during processing.");
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw;
+        }
+
+        var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
+        logBuilder.AppendLine(endLog);
+        _logger.LogInformation(endLog);
+        await WriteLog(logBuilder.ToString(), logPath);
+    }
+
+    private async Task<string> Convert4GestionesExcelToText(string excelFilePath, StringBuilder logBuilder)
+    {
+        var textFilePath = Path.ChangeExtension(excelFilePath, ".txt");
+        var delimiter = "|";
+        var expectedColumns = 19; // Number of columns after removing the first column
+        var sb = new StringBuilder();
+
+        try
+        {
+            using (var package = new ExcelPackage(new FileInfo(excelFilePath)))
+            {
+                var worksheet = package.Workbook.Worksheets.First();
+                var rowCount = worksheet.Dimension.Rows;
+                var colCount = worksheet.Dimension.Columns;
+
+                // Write the header
+                var header = new List<string>();
+                for (int col = 2; col <= colCount; col++) // Skip the first column
+                {
+                    header.Add(worksheet.Cells[1, col].Text);
+                }
+                sb.AppendLine(string.Join(delimiter, header));
+
+                // Write the data rows
+                for (int row = 2; row <= rowCount; row++)
+                {
+                    var rowValues = new List<string>();
+                    for (int col = 2; col <= colCount; col++) // Skip the first column
+                    {
+                        var cellValue = worksheet.Cells[row, col].Text;
+
+                        // Replace line breaks
+                        cellValue = cellValue.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
+
+                        // Convert date format if the value is a date
+                        if (DateTime.TryParseExact(cellValue, "dd/MM/yyyy hh:mm:ss tt", null, System.Globalization.DateTimeStyles.None, out DateTime dateValue))
+                        {
+                            cellValue = dateValue.ToString("yyyy-MM-dd HH:mm:ss");
+                        }
+
+                        rowValues.Add(cellValue);
+                    }
+
+                    // Ensure the row has the expected number of columns
+                    while (rowValues.Count < expectedColumns)
+                    {
+                        rowValues.Add(string.Empty);
+                    }
+
+                    sb.AppendLine(string.Join(delimiter, rowValues));
+                }
+            }
+
+            await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
+            var logMessage = $"Converted Excel to text for Gestiones: {textFilePath}";
+            logBuilder.AppendLine(logMessage);
+            _logger.LogInformation(logMessage);
+        }
+        catch (Exception ex)
+        {
+            var errorLog = $"Error during conversion: {ex.Message}";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(ex, errorLog);
+            throw;
+        }
+
+        return textFilePath;
+    }
+
+    private async Task BulkInsert4GestionesData(string textFilePath, StringBuilder logBuilder)
+    {
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE Stage_Gestiones;", connection, transaction);
+                    await truncateCommand.ExecuteNonQueryAsync();
+                    var logMessage = "Truncated table Stage_Gestiones.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' " +
+                                          "INTO TABLE Stage_Gestiones " +
+                                          "FIELDS TERMINATED BY '|' " +
+                                          "ENCLOSED BY '\"' " +
+                                          "LINES TERMINATED BY '\\n' " +
+                                          "IGNORE 1 LINES;";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+                    logMessage = "Bulk inserted data into Stage_Gestiones.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error during bulk insert: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task ExecuteInsert4Gestiones(StringBuilder logBuilder, string logPath)
+    {
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var insertCommandText = @"
+                        INSERT INTO Gestiones (
+                            AgenciaRegistro,
+                            CausaNoPago,
+                            CausaNoDomiciliacion,
+                            CodigoAccion,
+                            CodigoResultado,
+                            Comentarios,
+                            ContactoGenerado,
+                            Coordenadas,
+                            Credito,
+                            EstatusPromesa,
+                            FechaActividad,
+                            FechaPromesa,
+                            MontoPromesa,
+                            Origen,
+                            Producto,
+                            Resultado,
+                            Telefono,
+                            TipoPago,
+                            UsuarioRegistro
+                        )
+                        SELECT
+                            s.AgenciaRegistro,
+                            s.CausaNoPago,
+                            s.CausaNoDomiciliacion,
+                            s.CodigoAccion,
+                            s.CodigoResultado,
+                            s.Comentarios,
+                            s.ContactoGenerado,
+                            s.Coordenadas,
+                            s.Credito,
+                            s.EstatusPromesa,
+                            STR_TO_DATE(s.FechaActividad, '%Y-%m-%d %H:%i:%s') AS FechaActividad,
+                            CASE
+                                WHEN s.FechaPromesa IS NULL OR s.FechaPromesa = '' THEN NULL
+                                ELSE STR_TO_DATE(s.FechaPromesa, '%Y-%m-%d %H:%i:%s')
+                            END AS FechaPromesa,
+                            s.MontoPromesa,
+                            s.Origen,
+                            s.Producto,
+                            s.Resultado,
+                            s.Telefono,
+                            s.TipoPago,
+                            s.UsuarioRegistro
+                        FROM Stage_Gestiones s
+                        LEFT JOIN Gestiones g ON 
+                            s.AgenciaRegistro = g.AgenciaRegistro AND
+                            s.CausaNoPago = g.CausaNoPago AND
+                            s.CausaNoDomiciliacion = g.CausaNoDomiciliacion AND
+                            s.CodigoAccion = g.CodigoAccion AND
+                            s.CodigoResultado = g.CodigoResultado AND
+                            s.Comentarios = g.Comentarios AND
+                            s.ContactoGenerado = g.ContactoGenerado AND
+                            s.Coordenadas = g.Coordenadas AND
+                            s.Credito = g.Credito AND
+                            s.EstatusPromesa = g.EstatusPromesa AND
+                            STR_TO_DATE(s.FechaActividad, '%Y-%m-%d %H:%i:%s') = g.FechaActividad AND
+                            (CASE
+                                WHEN s.FechaPromesa IS NULL OR s.FechaPromesa = '' THEN NULL
+                                ELSE STR_TO_DATE(s.FechaPromesa, '%Y-%m-%d %H:%i:%s')
+                            END) = g.FechaPromesa AND
+                            s.MontoPromesa = g.MontoPromesa AND
+                            s.Origen = g.Origen AND
+                            s.Producto = g.Producto AND
+                            s.Resultado = g.Resultado AND
+                            s.Telefono = g.Telefono AND
+                            s.TipoPago = g.TipoPago AND
+                            s.UsuarioRegistro = g.UsuarioRegistro
+                        WHERE g.AgenciaRegistro IS NULL;
+                    ";
+
+                    var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
+                    await insertCommand.ExecuteNonQueryAsync();
+
+                    await transaction.CommitAsync();
+                    logBuilder.AppendLine("Insert successful.");
+                    _logger.LogInformation("Insert successful.");
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error executing insert: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    throw;
+                }
+            }
+        }
+    }
+
     private async Task Process7Juicios()
     {
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadJuicios.log";
@@ -445,6 +1093,7 @@ public class LoadDataController : Controller
             }
         }
     }
+
     private void MoveFilesToHistoric(string originalFilePath, string textFilePath, StringBuilder logBuilder)
     {
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
@@ -471,18 +1120,19 @@ public class LoadDataController : Controller
         logBuilder.AppendLine(logMessage);
         _logger.LogInformation(logMessage);
     }
-
     
     private async Task WriteLog(string logContent, string logPath)
     {
         var historicLogPath = Path.Combine(_historicFilePath, $"BulkLoad_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
         if (System.IO.File.Exists(logPath))
         {
+            // Move the existing log file to the historic folder
             System.IO.File.Move(logPath, historicLogPath);
         }
+        // Write the new log content
         await System.IO.File.WriteAllTextAsync(logPath, logContent);
     }
-
+  
     private async Task Process9FormulateDependencia()
     {
         var logBuilder = new StringBuilder();
@@ -534,6 +1184,167 @@ public class LoadDataController : Controller
         await WriteLog(logBuilder.ToString(), @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadFormulateDependencia.log");
     }
     
+    private async Task Process10TipoFinanciamiento()
+    {
+        var logBuilder = new StringBuilder();
+        var sqlFilePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\SQL\\FormulateFinanciamiento.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process10TipoFinanciamiento.");
+        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
+        logBuilder.AppendLine($"SQL Command: {sql}");
+        _logger.LogInformation("Starting Process10TipoFinanciamiento.");
+        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
+        _logger.LogInformation($"SQL Command: {sql}");
+                
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                var command = new MySqlCommand(sql, connection, transaction);
+                var affectedRows = await command.ExecuteNonQueryAsync();
+                logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
+                _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
+
+                if (affectedRows >= 1)
+                {
+                    _ = SendEmailAlert("New tipo_Financiamiento records have been added");
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
+                    _logger.LogInformation("Email alert sent.");
+                }
+                else
+                {
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new tipo_Financiamiento records added. No email sent.");
+                    _logger.LogInformation("No new tipo_Financiamiento records added. No email sent.");
+                }
+
+                await transaction.CommitAsync();
+                logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
+                _logger.LogInformation("Transaction committed.");
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
+                    _logger.LogError(ex, "Error executing SQL file.");
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task Process11Motivo()
+    {
+        var logBuilder = new StringBuilder();
+        var sqlFilePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\SQL\\FormulateMotivo.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process11Motivo.");
+        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
+        logBuilder.AppendLine($"SQL Command: {sql}");
+        _logger.LogInformation("Starting Process11Motivo.");
+        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
+        _logger.LogInformation($"SQL Command: {sql}");
+        
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var command = new MySqlCommand(sql, connection, transaction);
+                    var affectedRows = await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
+                    _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
+                    
+                    if (affectedRows >= 1)
+                    {
+                        _ = SendEmailAlert("New motivo records have been added");
+                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
+                        _logger.LogInformation("Email alert sent.");
+                    }
+                    else
+                    {
+                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new motivo records added. No email sent.");
+                        _logger.LogInformation("No new motivo records added. No email sent.");
+                    }
+                    
+                    await transaction.CommitAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
+                    _logger.LogInformation("Transaction committed.");
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
+                    _logger.LogError(ex, "Error executing SQL file.");
+                    throw;
+                }
+            }
+        }
+        
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process11Motivo completed.");
+        _logger.LogInformation("Process11Motivo completed.");
+        await WriteLog(logBuilder.ToString(), @"C:\\Users\\Go Credit\\Documents\\DATA\\LOGS\\BulkLoadMotivo.log");
+    }
+
+    private async Task Process12CatalogoBancos()
+    {
+        var logBuilder = new StringBuilder();
+        var sqlFilePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\SQL\\FormulateCatalogoBancos.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process12Clabe.");
+        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
+        logBuilder.AppendLine($"SQL Command: {sql}");
+        _logger.LogInformation("Starting Process12Clabe.");
+        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
+        _logger.LogInformation($"SQL Command: {sql}");
+        
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var command = new MySqlCommand(sql, connection, transaction);
+                    var affectedRows = await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
+                    _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
+                    
+                    if (affectedRows >= 1)
+                    {
+                        _ = SendEmailAlert("New clabe records have been added");
+                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
+                        _logger.LogInformation("Email alert sent.");
+                    }
+                    else
+                    {
+                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new clabe records added. No email sent.");
+                        _logger.LogInformation("No new clabe records added. No email sent.");
+                    }
+                    
+                    await transaction.CommitAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
+                    _logger.LogInformation("Transaction committed.");
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
+                    _logger.LogError(ex, "Error executing SQL file.");
+                    throw;
+                }
+            }
+        }
+        
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process12Clabe completed.");
+        _logger.LogInformation("Process12Clabe completed.");
+        await WriteLog(logBuilder.ToString(), @"C:\\Users\\Go Credit\\Documents\\DATA\\LOGS\\BulkLoadClabe.log");
+    }
+
     private async Task SendEmailAlert(string message)
     {
         var emailMessage = new MimeMessage();
@@ -556,4 +1367,5 @@ public class LoadDataController : Controller
             await client.DisconnectAsync(true);
         }
     }
+
 }
