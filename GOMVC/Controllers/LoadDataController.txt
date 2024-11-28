@@ -1171,10 +1171,10 @@ public class LoadDataController : Controller
     {
         var textFilePath = Path.Combine(_filePath, "Quebrantos.csv");
         var sb = new StringBuilder();
-
         try
         {
-            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
+            // Use StreamReader with ISO-8859-1 encoding
+            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("ISO-8859-1")))
             {
                 string line;
                 bool isFirstLine = true;
@@ -1187,16 +1187,15 @@ public class LoadDataController : Controller
                         continue; // Skip header
                     }
                     if (string.IsNullOrWhiteSpace(line)) continue;
-
                     var processedLine = line.Normalize(NormalizationForm.FormC);
-                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
-                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\\d{4})", "$3-$2-$1");
-
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "\n");
+                    
+                    // Convert date formats
+                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
                     sb.AppendLine(processedLine);
                 }
 #pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
-
             await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
             logBuilder.AppendLine($"Converted CSV to text: {textFilePath}");
             _logger.LogInformation($"Converted CSV to text: {textFilePath}");
@@ -1208,7 +1207,6 @@ public class LoadDataController : Controller
             _logger.LogError(ex, errorLog);
             throw;
         }
-
         return textFilePath;
     }
 
@@ -1521,7 +1519,6 @@ public class LoadDataController : Controller
     {
         var textFilePath = Path.ChangeExtension(excelFilePath, ".txt");
         var sb = new StringBuilder();
-
         try
         {
             using (var package = new ExcelPackage(new FileInfo(excelFilePath)))
@@ -1529,20 +1526,18 @@ public class LoadDataController : Controller
                 var worksheet = package.Workbook.Worksheets.First();
                 var rowCount = worksheet.Dimension.Rows;
                 var colCount = worksheet.Dimension.Columns;
-
                 for (int row = 1; row <= rowCount; row++)
                 {
                     var rowValues = new List<string>();
                     for (int col = 1; col <= colCount; col++)
                     {
                         var cellValue = worksheet.Cells[row, col].Text;
-
                         // Handle nulls and mixed datetime formats
                         if (DateTime.TryParseExact(cellValue, new[] { "dd/MM/yyyy HH:mm", "dd/MM/yyyy" }, null, System.Globalization.DateTimeStyles.None, out DateTime dateValue))
                         {
                             cellValue = dateValue.ToString("yyyy-MM-dd HH:mm:ss");
                         }
-                        else if (string.IsNullOrWhiteSpace(cellValue) || cellValue == "Excepciones MC")
+                        else if (string.IsNullOrWhiteSpace(cellValue))
                         {
                             cellValue = "NULL";
                         }
@@ -1550,13 +1545,11 @@ public class LoadDataController : Controller
                         {
                             cellValue = cellValue.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
                         }
-
                         rowValues.Add(cellValue);
                     }
-                    sb.AppendLine(string.Join("|", rowValues));
+                    sb.AppendLine(string.Join("\n", rowValues));
                 }
             }
-
             await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
             logBuilder.AppendLine($"Converted Excel to text: {textFilePath}");
             _logger.LogInformation($"Converted Excel to text: {textFilePath}");
@@ -1568,7 +1561,6 @@ public class LoadDataController : Controller
             _logger.LogError(ex, errorLog);
             throw;
         }
-
         return textFilePath;
     }
 
@@ -1586,16 +1578,18 @@ public class LoadDataController : Controller
                     logBuilder.AppendLine("Truncated table Stage_Sistema.");
                     _logger.LogInformation("Truncated table Stage_Sistema.");
 
-
-                    var loadCommandText = "LOAD DATA LOCAL INFILE '" + textFilePath.Replace("\\", "\\\\") + "' " +
-                                          "INTO TABLE Stage_Sistema " +
-                                          "FIELDS TERMINATED BY '|' " +
-                                          "ENCLOSED BY '\"' " +
-                                          "LINES TERMINATED BY '\\n' ";
+                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' " +
+                                        "INTO TABLE Stage_Sistema " +
+                                        "FIELDS TERMINATED BY '\n' " +
+                                        "ENCLOSED BY '\"' " +
+                                        "LINES TERMINATED BY '\\n' " +
+                                        "IGNORE 1 LINES;";
                     var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
                     await loadCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Bulk inserted data into Stage_Sistema.");
                     _logger.LogInformation("Bulk inserted data into Stage_Sistema.");
+
+                    await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
@@ -1611,6 +1605,8 @@ public class LoadDataController : Controller
 
     private async Task Execute8SistemaInsert(StringBuilder logBuilder, string logPath)
     {
+        var sqlFilePath = @"C:\Users\Go Credit\Documents\DATA\SQL\InsertSistema.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
         using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
@@ -1618,60 +1614,16 @@ public class LoadDataController : Controller
             {
                 try
                 {
-                    var insertCommandText = @"
-                        INSERT INTO Sistema (
-                            Agencia_Asignada_MC, Agencia_MC, Bandera_PP_Juicio, Codigo_MC, Credito_MC, Cuenta_Al_Corriente, 
-                            Dias_en_la_instancia_actual, Dias_Para_Siguiente_Pago, Estatus_MC, Estrategia, Excepciones_MC, 
-                            Fecha_de_Asignacion_CallCenter, Fecha_de_Asignacion_Visita, Fecha_De_Captura_de_Juicio, 
-                            Fecha_de_Ultima_Visita, Fecha_Promesa_MC, Fecha_Ult_Gestion_MC, Importe_Pago_X2, Importe_Pago_X3, 
-                            Importe_Pago_X4, Importe_Pago_X6, Monto_Promesa_MC, No_Gestiones, No_Visitas, Nombre_Agencia_MC, 
-                            Nombre_Del_Deudor_MC, Nombre_Instancia_MC, Producto_MC, Quita_Exclusiva, Resultado_MC, 
-                            Resultado_Visita_MC, Saldo_Menor, Semaforo_Gestion, Ult_Causa_No_Domiciliacion, Ult_Causa_No_Pago, 
-                            Usuario_Asignado, Usuario_Asignado_Extrajudicial
-                        )
-                        SELECT 
-                            Agencia_Asignada_MC, Agencia_MC, Bandera_PP_Juicio, Codigo_MC, Credito_MC, Cuenta_Al_Corriente, 
-                            Dias_en_la_instancia_actual, Dias_Para_Siguiente_Pago, Estatus_MC, Estrategia, Excepciones_MC, 
-                            CASE 
-                                WHEN Fecha_de_Asignacion_CallCenter = 'NULL' THEN NULL 
-                                ELSE STR_TO_DATE(Fecha_de_Asignacion_CallCenter, '%Y-%m-%d %H:%i:%s') 
-                            END AS Fecha_de_Asignacion_CallCenter, 
-                            CASE 
-                                WHEN Fecha_de_Asignacion_Visita = 'NULL' THEN NULL 
-                                ELSE STR_TO_DATE(Fecha_de_Asignacion_Visita, '%Y-%m-%d %H:%i:%s') 
-                            END AS Fecha_de_Asignacion_Visita, 
-                            CASE 
-                                WHEN Fecha_De_Captura_de_Juicio = 'NULL' THEN NULL 
-                                ELSE STR_TO_DATE(Fecha_De_Captura_de_Juicio, '%Y-%m-%d %H:%i:%s') 
-                            END AS Fecha_De_Captura_de_Juicio, 
-                            CASE 
-                                WHEN Fecha_de_Ultima_Visita = 'NULL' THEN NULL 
-                                ELSE STR_TO_DATE(Fecha_de_Ultima_Visita, '%Y-%m-%d %H:%i:%s') 
-                            END AS Fecha_de_Ultima_Visita, 
-                            CASE 
-                                WHEN Fecha_Promesa_MC = 'NULL' THEN NULL 
-                                ELSE STR_TO_DATE(Fecha_Promesa_MC, '%Y-%m-%d %H:%i:%s') 
-                            END AS Fecha_Promesa_MC, 
-                            CASE 
-                                WHEN Fecha_Ult_Gestion_MC = 'NULL' THEN NULL 
-                                ELSE STR_TO_DATE(Fecha_Ult_Gestion_MC, '%Y-%m-%d %H:%i:%s') 
-                            END AS Fecha_Ult_Gestion_MC, 
-                            Importe_Pago_X2, Importe_Pago_X3, Importe_Pago_X4, Importe_Pago_X6, Monto_Promesa_MC, No_Gestiones, 
-                            No_Visitas, Nombre_Agencia_MC, Nombre_Del_Deudor_MC, Nombre_Instancia_MC, Producto_MC, Quita_Exclusiva, 
-                            Resultado_MC, Resultado_Visita_MC, Saldo_Menor, Semaforo_Gestion, Ult_Causa_No_Domiciliacion, 
-                            Ult_Causa_No_Pago, Usuario_Asignado, Usuario_Asignado_Extrajudicial
-                        FROM Stage_Sistema;";
-
-                    var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
-                    await insertCommand.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Executed SQL insert successfully.");
-                    _logger.LogInformation("Executed SQL insert successfully.");
+                    var command = new MySqlCommand(sql, connection, transaction);
+                    await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Executed SQL file successfully.");
+                    _logger.LogInformation("Executed SQL file successfully.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    var errorLog = $"Error executing SQL insert: {ex.Message}";
+                    var errorLog = $"Error executing SQL file: {ex.Message}";
                     logBuilder.AppendLine(errorLog);
                     _logger.LogError(ex, errorLog);
                     throw;
