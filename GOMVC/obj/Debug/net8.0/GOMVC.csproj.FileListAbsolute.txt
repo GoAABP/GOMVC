@@ -69,6 +69,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Settings.Confi
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Sinks.Console.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Sinks.Debug.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Sinks.File.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\SharpCompress.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.CodeDom.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Composition.AttributedModel.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Composition.Convention.dll

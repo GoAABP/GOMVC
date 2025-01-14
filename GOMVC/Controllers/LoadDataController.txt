@@ -17,6 +17,13 @@ using MimeKit;
 using MailKit.Security;
 using MailKit;
 using System.Diagnostics;
+using System.Xml.Linq;
+using GOMVC;
+using SharpCompress.Archives;
+using SharpCompress.Common;
+using SharpCompress.Readers;
+using System.Data;
+
 
 public class LoadDataController : Controller
 {
@@ -38,11 +45,12 @@ public class LoadDataController : Controller
 #pragma warning restore CS8601 // Possible null reference assignment.
     }
 
-    [HttpGet]
-    public IActionResult Index()
-    {
-        var activities = new List<string>
-        {
+    [HttpGet] 
+    public IActionResult Index() 
+    { 
+        var activities = new List<string> 
+        { 
+            "BD01",
             "1-SaldosCartera",
             "2-SaldosContables",
             "3-OtorgamientoCreditos",
@@ -54,18 +62,24 @@ public class LoadDataController : Controller
             "9-FormulateDependencia",
             "10-TipoFinanciamiento",
             "11-Motivo",
-            "12-CatalogoBancos"
+            "12-CatalogoBancos",
+            "13-CatalogoGestoresArea",
+            "14-CatalogoResultadosAvance",
+            "15-LoadDemograficos" // Added new activity
         };
-        return View(activities);
+        return View(activities); 
     }
 
-    [HttpPost("HandleActivity")]
-    public async Task<IActionResult> HandleActivity(string activityName)
-    {
-        try
-        {
-            switch (activityName.ToLower())
-            {
+    [HttpPost("HandleActivity")] 
+    public async Task<IActionResult> HandleActivity(string activityName) 
+    { 
+        try 
+        { 
+            switch (activityName.ToLower()) 
+            { 
+                //case "bd01":
+                //    await ProcessBD01();
+                //    break;
                 case "1-saldoscartera":
                     await Process1SaldosCartera();
                     break;
@@ -102,18 +116,27 @@ public class LoadDataController : Controller
                 case "12-catalogobancos":
                     await Process12CatalogoBancos();
                     break;
+                case "13-catalogogestoresarea":
+                    await Process13CatalogoGestoresArea();
+                    break;
+                case "14-catalogoresultadosavance":
+                    await Process14CatalogoResultadosAvanceAsync();
+                    break;
+                case "15-loaddemograficos":
+                    await Process15LoadDemograficos();
+                    break;
                 default:
                     _logger.LogError($"Unknown activity: {activityName}");
                     return BadRequest("Unknown activity.");
-            }
-            _logger.LogInformation("File processed successfully.");
-            return Ok("File processed successfully.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing file.");
-            return StatusCode(500, "Internal server error.");
-        }
+            } 
+            _logger.LogInformation("File processed successfully."); 
+            return Ok("File processed successfully."); 
+        } 
+        catch (Exception ex) 
+        { 
+            _logger.LogError(ex, "Error processing file."); 
+            return StatusCode(500, "Internal server error."); 
+        } 
     }
     
     private async Task Process1SaldosCartera()
@@ -157,49 +180,32 @@ public class LoadDataController : Controller
 
     private async Task<string> Convert1SaldosCarteraCsvToText(string csvFilePath, StringBuilder logBuilder)
     {
-        // Register the code pages encoding provider
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
         var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
         var sb = new StringBuilder();
-        
+
         try
         {
-            // Use StreamReader with Windows-1252 encoding
             using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
             {
                 string line;
-                bool isFirstLine = true;
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    if (isFirstLine)
-                    {
-                        isFirstLine = false;
-                        continue; // Skip header
-                    }
                     if (string.IsNullOrWhiteSpace(line)) continue;
-                    
-                    // Handle accents and other special characters
+
                     var processedLine = line.Normalize(NormalizationForm.FormC);
-                    
-                    // Replace commas outside quotes with pipes
-                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
-                    
-                    // Convert date formats
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "\n");
                     processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
-                    
+
                     sb.AppendLine(processedLine);
                 }
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
-            
-            // Use StreamWriter with UTF-8 encoding to ensure the output file is in UTF-8
+
             using (var writer = new StreamWriter(textFilePath, false, Encoding.UTF8))
             {
                 await writer.WriteAsync(sb.ToString());
             }
-            
+
             var logMessage = $"Converted CSV to text for SaldosCartera: {textFilePath}";
             logBuilder.AppendLine(logMessage);
             _logger.LogInformation(logMessage);
@@ -211,7 +217,7 @@ public class LoadDataController : Controller
             _logger.LogError(ex, errorLog);
             throw;
         }
-        
+
         return textFilePath;
     }
     
@@ -390,24 +396,16 @@ public class LoadDataController : Controller
             using (var reader = new System.IO.StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
             {
                 string line;
-                bool isFirstLine = true;
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    if (isFirstLine)
-                    {
-                        isFirstLine = false;
-                        continue; // Skip header
-                    }
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
                     var processedLine = line.Normalize(NormalizationForm.FormC);
-                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "\n");
                     processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
 
                     sb.AppendLine(processedLine);
                 }
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
 
             await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
@@ -561,7 +559,7 @@ public class LoadDataController : Controller
         await WriteLog(logBuilder.ToString(), logPath);
     }
 
-    private async Task<string> Convert3OtorgamientoCreditosCsvToText(string csvFilePath, StringBuilder logBuilder)
+   private async Task<string> Convert3OtorgamientoCreditosCsvToText(string csvFilePath, StringBuilder logBuilder)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
@@ -572,15 +570,8 @@ public class LoadDataController : Controller
             using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
             {
                 string line;
-                bool isFirstLine = true;
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    if (isFirstLine)
-                    {
-                        isFirstLine = false;
-                        continue; // Skip header
-                    }
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
                     var columns = line.Split(',');
@@ -589,16 +580,15 @@ public class LoadDataController : Controller
                         var errorLog = "Encountered 0 in the first column. Stopping processing.";
                         logBuilder.AppendLine(errorLog);
                         _logger.LogError(errorLog);
-                        break; // Stop processing further lines
+                        break;
                     }
 
                     var processedLine = line.Normalize(NormalizationForm.FormC);
-                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
-                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\\d{2})/(\\d{4})", "$3-$2-$1");
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "\n");
+                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
 
                     sb.AppendLine(processedLine);
                 }
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
 
             using (var writer = new StreamWriter(textFilePath, false, Encoding.UTF8))
@@ -986,7 +976,7 @@ public class LoadDataController : Controller
 
     private async Task<string> Convert5AplicacionPagosCsvToText(StringBuilder logBuilder)
     {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Register the encoding provider
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var csvFilePath = Path.Combine(_filePath, "Aplicacion de pagos por fecha de Aplica.csv");
         var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
         var sb = new StringBuilder();
@@ -996,24 +986,22 @@ public class LoadDataController : Controller
             using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
             {
                 string line;
-                bool isFirstLine = true;
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    if (isFirstLine)
-                    {
-                        isFirstLine = false;
-                        continue; // Skip header
-                    }
                     if (string.IsNullOrWhiteSpace(line)) continue;
 
+                    var columns = line.Split(',');
+                    if (columns[0] == "0")
+                    {
+                        break;
+                    }
+
                     var processedLine = line.Normalize(NormalizationForm.FormC);
-                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "|");
+                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "\n");
                     processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
 
                     sb.AppendLine(processedLine);
                 }
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
 
             await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
@@ -1030,7 +1018,7 @@ public class LoadDataController : Controller
 
         return textFilePath;
     }
-
+    
     private async Task BulkInsert5AplicacionPagosData(string textFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
@@ -1147,11 +1135,18 @@ public class LoadDataController : Controller
             }
             var csvFilePath = files[0];
             logBuilder.AppendLine("File found.");
-
             var textFilePath = await Convert6QuebrantosCsvToText(csvFilePath, logBuilder);
             await BulkInsert6QuebrantosData(textFilePath, logBuilder);
             await Execute6QuebrantosInsert(logBuilder, logPath);
             MoveFilesToHistoric(csvFilePath, textFilePath, logBuilder);
+
+            // Execute CalcularQuebrantos.sql
+            await Execute6CalcularQuebrantos(logBuilder, logPath);
+
+            var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
+            logBuilder.AppendLine(endLog);
+            _logger.LogInformation(endLog);
+            await WriteLog(logBuilder.ToString(), logPath);
         }
         catch (Exception ex)
         {
@@ -1160,43 +1155,38 @@ public class LoadDataController : Controller
             await WriteLog(logBuilder.ToString(), logPath);
             throw;
         }
-
-        var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
-        logBuilder.AppendLine(endLog);
-        _logger.LogInformation(endLog);
-        await WriteLog(logBuilder.ToString(), logPath);
     }
 
     private async Task<string> Convert6QuebrantosCsvToText(string csvFilePath, StringBuilder logBuilder)
     {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var textFilePath = Path.Combine(_filePath, "Quebrantos.csv");
         var sb = new StringBuilder();
+        var lines = new List<string>();
+
         try
         {
-            // Use StreamReader with ISO-8859-1 encoding
-            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("ISO-8859-1")))
+            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
             {
                 string line;
-                bool isFirstLine = true;
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    if (isFirstLine)
-                    {
-                        isFirstLine = false;
-                        continue; // Skip header
-                    }
                     if (string.IsNullOrWhiteSpace(line)) continue;
+
                     var processedLine = line.Normalize(NormalizationForm.FormC);
                     processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "\n");
-                    
-                    // Convert date formats
                     processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1");
-                    sb.AppendLine(processedLine);
+
+                    lines.Add(processedLine);
                 }
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
-            await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
+
+            if (lines.Count > 0)
+            {
+                lines.RemoveAt(lines.Count - 1);
+            }
+
+            await System.IO.File.WriteAllTextAsync(textFilePath, string.Join(Environment.NewLine, lines), Encoding.UTF8);
             logBuilder.AppendLine($"Converted CSV to text: {textFilePath}");
             _logger.LogInformation($"Converted CSV to text: {textFilePath}");
         }
@@ -1207,9 +1197,10 @@ public class LoadDataController : Controller
             _logger.LogError(ex, errorLog);
             throw;
         }
+
         return textFilePath;
     }
-
+    
     private async Task BulkInsert6QuebrantosData(string textFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
@@ -1302,6 +1293,35 @@ public class LoadDataController : Controller
                 {
                     await transaction.RollbackAsync();
                     var errorLog = $"Error executing SQL insert: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task Execute6CalcularQuebrantos(StringBuilder logBuilder, string logPath)
+    {
+        var sqlFilePath = @"C:\Users\Go Credit\Documents\DATA\SQL\CalcularQuebrantos.sql";
+        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var command = new MySqlCommand(sql, connection, transaction);
+                    await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Executed CalcularQuebrantos.sql successfully.");
+                    _logger.LogInformation("Executed CalcularQuebrantos.sql successfully.");
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error executing CalcularQuebrantos.sql: {ex.Message}";
                     logBuilder.AppendLine(errorLog);
                     _logger.LogError(ex, errorLog);
                     throw;
@@ -1475,13 +1495,12 @@ public class LoadDataController : Controller
 
     private async Task Process8Sistema()
     {
-        var logBuilder = new StringBuilder();
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadSistema.log";
+        var logBuilder = new StringBuilder();
         var todayDate = DateTime.Now.ToString("yyyy-MM-dd");
         var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
         logBuilder.AppendLine(startLog);
         _logger.LogInformation(startLog);
-
         try
         {
             // Check for Excel file
@@ -1491,14 +1510,13 @@ public class LoadDataController : Controller
                 var errorLog = "File not found.";
                 logBuilder.AppendLine(errorLog);
                 _logger.LogError(errorLog);
+                await WriteLog(logBuilder.ToString(), logPath);
                 throw new FileNotFoundException(errorLog);
             }
             var excelFilePath = files[0];
             logBuilder.AppendLine("File found.");
-
             var textFilePath = await Convert8SistemaExcelToText(excelFilePath, logBuilder);
             await BulkInsert8SistemaData(textFilePath, logBuilder);
-            await Execute8SistemaInsert(logBuilder, logPath);
             MoveFilesToHistoric(excelFilePath, textFilePath, logBuilder);
         }
         catch (Exception ex)
@@ -1508,7 +1526,6 @@ public class LoadDataController : Controller
             await WriteLog(logBuilder.ToString(), logPath);
             throw;
         }
-
         var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
         logBuilder.AppendLine(endLog);
         _logger.LogInformation(endLog);
@@ -1547,7 +1564,7 @@ public class LoadDataController : Controller
                         }
                         rowValues.Add(cellValue);
                     }
-                    sb.AppendLine(string.Join("\n", rowValues));
+                    sb.AppendLine(string.Join(",", rowValues));
                 }
             }
             await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
@@ -1578,12 +1595,11 @@ public class LoadDataController : Controller
                     logBuilder.AppendLine("Truncated table Stage_Sistema.");
                     _logger.LogInformation("Truncated table Stage_Sistema.");
 
-                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' " +
-                                        "INTO TABLE Stage_Sistema " +
-                                        "FIELDS TERMINATED BY '\n' " +
-                                        "ENCLOSED BY '\"' " +
-                                        "LINES TERMINATED BY '\\n' " +
-                                        "IGNORE 1 LINES;";
+                    var loadCommandText = "LOAD DATA LOCAL INFILE '" + textFilePath.Replace("\\", "\\\\") + "' " +
+                                          "INTO TABLE stage_juicios " +
+                                          "FIELDS TERMINATED BY '|' " +
+                                          "ENCLOSED BY '\"' " +
+                                          "LINES TERMINATED BY '\\n' ";
                     var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
                     await loadCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Bulk inserted data into Stage_Sistema.");
@@ -1883,6 +1899,355 @@ public class LoadDataController : Controller
         await WriteLog(logBuilder.ToString(), @"C:\\Users\\Go Credit\\Documents\\DATA\\LOGS\\BulkLoadClabe.log");
     }
 
+    private async Task Process13CatalogoGestoresArea()
+    {
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadCatalogoGestoresArea.log";
+        var logBuilder = new StringBuilder();
+        var todayDate = DateTime.Now.ToString("yyyy-MM-dd");
+        var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
+        logBuilder.AppendLine(startLog);
+        _logger.LogInformation(startLog);
+
+        var files = Directory.GetFiles(_filePath, "Usuarios.csv");
+        if (files.Length == 0)
+        {
+            var errorLog = "File not found.";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(errorLog);
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw new FileNotFoundException(errorLog);
+        }
+        var file = files[0];
+        logBuilder.AppendLine("File found.");
+
+        try
+        {
+            var textFilePath = await Convert13CatalogoGestoresAreaCsvToText(file, logBuilder);
+            await BulkInsert13CatalogoGestoresAreaData(textFilePath, logBuilder);
+            MoveFilesToHistoric(file, textFilePath, logBuilder);
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error: {ex.Message}");
+            _logger.LogError(ex, "Error during processing.");
+            await WriteLog(logBuilder.ToString(), logPath);
+            throw;
+        }
+
+        var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
+        logBuilder.AppendLine(endLog);
+        _logger.LogInformation(endLog);
+        await WriteLog(logBuilder.ToString(), logPath);
+    }
+
+   private async Task<string> Convert13CatalogoGestoresAreaCsvToText(string csvFilePath, StringBuilder logBuilder)
+    {
+        var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
+        var sb = new StringBuilder();
+
+        try
+        {
+            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
+            {
+                string line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    var columns = line.Split(',');
+                    var rowValues = new List<string>
+                    {
+                        columns.Length > 0 ? columns[0] : "",
+                        columns.Length > 1 ? columns[1] : "",
+                        columns.Length > 2 ? columns[2] : "",
+                        columns.Length > 3 ? columns[3] : ""
+                    };
+
+                    sb.AppendLine(string.Join(",", rowValues));
+                }
+            }
+
+            await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
+            var logMessage = $"Converted CSV to text for CatalogoGestoresArea: {textFilePath}";
+            logBuilder.AppendLine(logMessage);
+            _logger.LogInformation(logMessage);
+        }
+        catch (Exception ex)
+        {
+            var errorLog = $"Error during conversion: {ex.Message}";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(ex, errorLog);
+            throw;
+        }
+
+        return textFilePath;
+    }
+
+    private async Task BulkInsert13CatalogoGestoresAreaData(string textFilePath, StringBuilder logBuilder)
+    {
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE Stage_CatalogoGestoresArea;", connection, transaction);
+                    await truncateCommand.ExecuteNonQueryAsync();
+                    var logMessage = "Truncated table Stage_CatalogoGestoresArea.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    var loadCommandText = "LOAD DATA LOCAL INFILE '" + textFilePath.Replace("\\", "\\\\") + "' " +
+                                          "INTO TABLE stage_juicios " +
+                                          "FIELDS TERMINATED BY '|' " +
+                                          "ENCLOSED BY '\"' " +
+                                          "LINES TERMINATED BY '\\n' ";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+                    logMessage = "Bulk inserted data into Stage_CatalogoGestoresArea.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    var insertCommandText = @"
+                        INSERT INTO CatalogoGestoresArea (UsuarioMC, Estatus, Perfil, Area)
+                        SELECT s.UsuarioMC, s.Estatus, s.Perfil, s.Area
+                        FROM Stage_CatalogoGestoresArea s
+                        LEFT JOIN CatalogoGestoresArea c ON s.UsuarioMC = c.UsuarioMC
+                        WHERE c.UsuarioMC IS NULL;";
+                    var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
+                    await insertCommand.ExecuteNonQueryAsync();
+                    logMessage = "Inserted new rows into CatalogoGestoresArea.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    var updateCommandText = @"
+                        UPDATE CatalogoGestoresArea c
+                        JOIN Stage_CatalogoGestoresArea s ON c.UsuarioMC = s.UsuarioMC
+                        SET c.Estatus = s.Estatus;";
+                    var updateCommand = new MySqlCommand(updateCommandText, connection, transaction);
+                    await updateCommand.ExecuteNonQueryAsync();
+                    logMessage = "Updated Estatus in CatalogoGestoresArea.";
+                    logBuilder.AppendLine(logMessage);
+                    _logger.LogInformation(logMessage);
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    var errorLog = $"Error during bulk insert for CatalogoGestoresArea: {ex.Message}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(ex, errorLog);
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task Process14CatalogoResultadosAvanceAsync()
+    {
+        try
+        {
+            // Log the start of the process
+            _logger.LogInformation("Starting Process14CatalogoResultadosAvance...");
+
+            // Define the file path for the input data
+            string inputFilePath = Path.Combine(_filePath, "gestiones.csv"); // Adjust the file name as necessary
+            var resultados = new List<string>();
+
+            // Step 1: Read the CSV file and extract Resultado values
+            using (var reader = new StreamReader(inputFilePath))
+            {
+                string headerLine = await reader.ReadLineAsync(); // Read the header line
+                int resultadoIndex = Array.IndexOf(headerLine.Split(','), "Resultado"); // Find the index of Resultado column
+
+                if (resultadoIndex == -1)
+                {
+                    _logger.LogError("Resultado column not found in the CSV file.");
+                    return;
+                }
+
+                while (!reader.EndOfStream)
+                {
+                    var line = await reader.ReadLineAsync();
+                    var values = line.Split(',');
+
+                    // Ensure the Resultado column exists in the current line
+                    if (values.Length > resultadoIndex)
+                    {
+                        string resultado = values[resultadoIndex].Trim();
+                        if (!string.IsNullOrEmpty(resultado) && !resultados.Contains(resultado))
+                        {
+                            resultados.Add(resultado); // Add distinct Resultado values
+                        }
+                    }
+                }
+            }
+
+            // Step 2: Insert distinct Resultado values into catalogoresultadosavance
+            string connectionString = _configuration.GetConnectionString("DefaultConnection");
+            using (var connection = new MySqlConnection(connectionString))
+            {
+                await connection.OpenAsync();
+
+                string insertQuery = "INSERT INTO catalogoresultadosavance (Clave) VALUES (@Clave)";
+                using (var insertCommand = new MySqlCommand(insertQuery, connection))
+                {
+                    insertCommand.Parameters.Add("@Clave", MySqlDbType.VarChar);
+
+                    foreach (var resultado in resultados)
+                    {
+                        insertCommand.Parameters["@Clave"].Value = resultado;
+                        await insertCommand.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            // Log the successful completion of the process
+            _logger.LogInformation("Process14CatalogoResultadosAvance completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            // Log any errors that occur during the process
+            _logger.LogError($"An error occurred in Process14CatalogoResultadosAvance: {ex.Message}");
+        }
+    }
+    
+    public async Task<IActionResult> Process15LoadDemograficos()
+    {
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadDemograficos.log"; 
+        var logBuilder = new StringBuilder(); 
+        var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started. "; 
+        logBuilder.AppendLine(startLog); 
+        _logger.LogInformation(startLog); 
+
+        try
+        {
+            // Step 1: Download and Extract Files
+            await DownloadAndExtract15Demograficos();
+            logBuilder.AppendLine("Downloaded and extracted Demograficos files.");
+            _logger.LogInformation("Downloaded and extracted Demograficos files.");
+
+            // Step 2: Restore Database
+            string bakFilePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES\your_database.bak"; // Adjust the path
+            Restore15DemograficosDatabase(bakFilePath);
+            logBuilder.AppendLine("Restored Demograficos database.");
+            _logger.LogInformation("Restored Demograficos database.");
+
+            // Step 3: Export CSV
+            string csvFilePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES\dwtClient.csv"; // Adjust the path
+            Export15DwtClientToCsvFile(csvFilePath);
+            logBuilder.AppendLine("Exported dwtClient to CSV file.");
+            _logger.LogInformation("Exported dwtClient to CSV file.");
+
+            // Step 4: Bulk Insert Data
+            await BulkInsert15DemograficosFromCsv(csvFilePath);
+            logBuilder.AppendLine("Bulk inserted Demograficos data from CSV.");
+            _logger.LogInformation("Bulk inserted Demograficos data from CSV.");
+
+            // Step 5: Move files to historic folder
+            MoveFilesToHistoric(bakFilePath, csvFilePath, logBuilder); // Assuming you have a method to move files
+            logBuilder.AppendLine("Moved files to historic folder.");
+            _logger.LogInformation("Moved files to historic folder.");
+
+            // Final Log
+            var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully."; 
+            logBuilder.AppendLine(endLog); 
+            _logger.LogInformation(endLog); 
+
+            await WriteLog(logBuilder.ToString(), logPath); // Write the log content to the log file
+            return Ok("Demograficos loaded successfully.");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error: {ex.Message}"); 
+            _logger.LogError(ex, "Error during loading Demograficos."); 
+            await WriteLog(logBuilder.ToString(), logPath); // Log the error details
+            return BadRequest($"Error loading Demograficos: {ex.Message}");
+        }
+    }
+  
+    public async Task DownloadAndExtract15Demograficos()
+    {
+        string url = "http://gocredit.zell.mx/gbckupgo/dwGocredit.rar";
+        string destinationPath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES\dwGocredit.rar";
+        string extractPath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
+        string password = "Zell#G0";
+
+        using (WebClient client = new WebClient())
+        {
+            await client.DownloadFileTaskAsync(new Uri(url), destinationPath);
+        }
+
+        using (var archive = ArchiveFactory.Open(destinationPath))
+        {
+            var readerOptions = new SharpCompress.Readers.ReaderOptions() { Password = password };
+            foreach (var entry in archive.Entries.Where(entry => !entry.IsDirectory))
+            {
+                try
+                {
+                    entry.WriteToDirectory(extractPath, new ExtractionOptions { ExtractFullPath = true, Overwrite = true });
+                    _logger.LogInformation($"Extracted {entry.Key} with size {entry.Size} bytes.");
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message.Contains("password"))
+                    {
+                        _logger.LogError(ex, $"Password error extracting {entry.Key}: {ex.Message}");
+                    }
+                    else
+                    {
+                        _logger.LogError(ex, $"Error extracting {entry.Key}: {ex.Message}");
+                    }
+                }
+            }
+        }
+    }
+
+    public void Restore15DemograficosDatabase(string bakFilePath)
+    {
+        string sqlCmd = $"/C sqlcmd -S your_server -U your_username -P your_password -Q \"RESTORE DATABASE YourDatabase FROM DISK='{bakFilePath}' WITH REPLACE\"";
+        System.Diagnostics.Process.Start("cmd.exe", sqlCmd);
+    }
+
+    public void Export15DwtClientToCsvFile(string csvFilePath)
+    {
+        string sqlCmd = $"/C sqlcmd -S your_server -U your_username -P your_password -d YourDatabase -Q \"SELECT * FROM dwtClient\" -o \"{csvFilePath}\" -s \"|\" -W";
+        System.Diagnostics.Process.Start("cmd.exe", sqlCmd);
+    }
+
+    public async Task BulkInsert15DemograficosFromCsv(string csvFilePath)
+    {
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE Demograficos;", connection, transaction);
+                    await truncateCommand.ExecuteNonQueryAsync();
+
+                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
+                                        "INTO TABLE Demograficos " +
+                                        "FIELDS TERMINATED BY '|' " +
+                                        "ENCLOSED BY '\"' " +
+                                        "LINES TERMINATED BY '\\n';";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+        }
+    }
+   
     private async Task SendEmailAlert(string message)
     {
         var emailMessage = new MimeMessage();
@@ -1905,5 +2270,5 @@ public class LoadDataController : Controller
             await client.DisconnectAsync(true);
         }
     }
-
+    
 }

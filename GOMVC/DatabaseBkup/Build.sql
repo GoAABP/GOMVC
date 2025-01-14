@@ -1,20 +1,23 @@
 -- Create database
-create database godatabase;
+drop database godatabase;
+CREATE DATABASE godatabase;
 -- Ensure the database is on use
 use godatabase;
 
 CREATE TABLE Users (
-    DBKEY INT AUTO_INCREMENT PRIMARY KEY,
+    User_Key INT AUTO_INCREMENT PRIMARY KEY,
     NAME VARCHAR(255),
     USERNAME VARCHAR(255) NOT NULL,
     EMAIL VARCHAR(255),
     PASSWORD VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE Stage_Saldos_Cartera (
+INSERT INTO Users (username, password) values ("UserA", "123456"), ("Userb", "123456");
+
+CREATE TABLE D1_Stage_Saldos_Cartera (
     Id_Solicitud INT,
     Id_Credito INT,
-    IdPersona INT,
+    Id_Persona INT,
     Referencia VARCHAR(50) NULL,
     Afiliado VARCHAR(50) NULL,
     Nombre VARCHAR(100) NULL,
@@ -108,11 +111,11 @@ CREATE TABLE Stage_Saldos_Cartera (
     vOpTable VARCHAR(50) NULL
 );
 
-CREATE TABLE Saldos_Cartera (
-    DBKEY int auto_increment primary key not null,
+CREATE TABLE D1_Saldos_Cartera (
+    D1_Key int auto_increment primary key not null,
     Id_Solicitud INT,
     Id_Credito INT,
-    IdPersona INT,
+    Id_Persona INT,
     Referencia VARCHAR(50) NULL,
     Afiliado VARCHAR(50) NULL,
     Nombre VARCHAR(100) NULL,
@@ -207,7 +210,7 @@ CREATE TABLE Saldos_Cartera (
     FechaGenerado DATETIME
 );
 
-CREATE TABLE Stage_Saldos_Contables (
+CREATE TABLE D2_Stage_Saldos_Contables (
     Id_Credito INT not null,
     Referencia VARCHAR(50) not null,
     Nombre VARCHAR(100) NULL,
@@ -261,8 +264,8 @@ CREATE TABLE Stage_Saldos_Contables (
     Status VARCHAR(20) NULL
 );
 
-CREATE TABLE Saldos_Contables (
-    DBKEY int auto_increment primary key not null,
+CREATE TABLE D2_Saldos_Contables (
+	D2_Key int auto_increment primary key not null,
     Id_Credito INT not null,
     Referencia VARCHAR(50) not null,
     Nombre VARCHAR(100) NULL,
@@ -317,7 +320,7 @@ CREATE TABLE Saldos_Contables (
     FechaGenerado DATETIME not null
 );
 
-CREATE TABLE Stage_Aplicacion_Pagos (
+CREATE TABLE D3_Stage_Aplicacion_Pagos (
     Id_Credito INT NULL,
     Id_Convenio INT NULL,
     Convenio VARCHAR(255) NULL,
@@ -349,11 +352,11 @@ CREATE TABLE Stage_Aplicacion_Pagos (
     Pago_Exceso DECIMAL(10, 2) NULL,
     Gestor VARCHAR(255) NULL,
     Forma_de_pago VARCHAR(255) NULL,
-    vMotive VARCHAR(255) NULL,
-    PRIMARY KEY (Id_Pago)
+    vMotive VARCHAR(255) NULL
 );
 
-CREATE TABLE Aplicacion_Pagos (
+CREATE TABLE D3_Aplicacion_Pagos (
+	D3_Key int auto_increment primary key not null,
     Id_Credito INT NULL,
     Id_Convenio INT NULL,
     Convenio VARCHAR(255) NULL,
@@ -385,11 +388,10 @@ CREATE TABLE Aplicacion_Pagos (
     Pago_Exceso DECIMAL(10, 2) NULL,
     Gestor VARCHAR(255) NULL,
     Forma_de_pago VARCHAR(255) NULL,
-    vMotive VARCHAR(255) NULL,
-    PRIMARY KEY (Id_Pago)
+    vMotive VARCHAR(255) NULL
 );
 
-CREATE TABLE Stage_Otorgamiento_Creditos (
+CREATE TABLE D4_Stage_Otorgamiento_Creditos (
     Id_Credito INT PRIMARY KEY,
     Referencia VARCHAR(50) NULL,
     Nombre VARCHAR(100) NULL,
@@ -427,8 +429,9 @@ CREATE TABLE Stage_Otorgamiento_Creditos (
     vAliado VARCHAR(100) NULL
 );
 
-CREATE TABLE Otorgamiento_Creditos (
-    Id_Credito INT PRIMARY KEY,
+CREATE TABLE D4_Otorgamiento_Creditos (
+	D4_Key int auto_increment primary key not null,
+    Id_Credito INT,
     Referencia VARCHAR(50) NULL,
     Nombre VARCHAR(100) NULL,
     Fecha_Apertura DATE NULL,
@@ -465,51 +468,52 @@ CREATE TABLE Otorgamiento_Creditos (
     vAliado VARCHAR(100) NULL
 );
 
-CREATE TABLE Stage_Gestiones (
-    AgenciaRegistro VARCHAR(255),
-    CausaNoPago VARCHAR(255),
-    CausaNoDomiciliacion VARCHAR(255),
-    CodigoAccion INT,
-    CodigoResultado INT,
+CREATE TABLE D5_Stage_Gestiones (
+    Agencia_Registro VARCHAR(255),
+    Causa_NoP_ago VARCHAR(255),
+    Causa_No_Domiciliacion VARCHAR(255),
+    Codigo_Accion INT,
+    Codigo_Resultado INT,
     Comentarios TEXT,
-    ContactoGenerado VARCHAR(255),
+    Contacto_Generado VARCHAR(255),
     Coordenadas VARCHAR(255),
     Credito INT,
-    EstatusPromesa VARCHAR(50),
-    FechaActividad TEXT,
-    FechaPromesa TEXT,
-    MontoPromesa DECIMAL(10, 2),
+    Estatus_Promesa VARCHAR(50),
+    Fecha_Actividad TEXT,
+    Fecha_Promesa TEXT,
+    Monto_Promesa DECIMAL(10, 2),
     Origen VARCHAR(50),
     Producto VARCHAR(50),
     Resultado VARCHAR(50),
     Telefono VARCHAR(20),
     TipoPago VARCHAR(50),
-    UsuarioRegistro VARCHAR(50)
+    Usuario_Registro VARCHAR(50)
 );
 
-CREATE TABLE Gestiones (
-    AgenciaRegistro VARCHAR(255),
-    CausaNoPago VARCHAR(255),
-    CausaNoDomiciliacion VARCHAR(255),
-    CodigoAccion INT,
-    CodigoResultado INT,
+CREATE TABLE D5_Gestiones (
+	D5_Key int auto_increment primary key not null,
+    Agencia_Registro VARCHAR(255),
+    Causa_No_Pago VARCHAR(255),
+    Causa_No_Domiciliacion VARCHAR(255),
+    Codigo_Accion INT,
+    Codigo_Resultado INT,
     Comentarios TEXT,
-    ContactoGenerado VARCHAR(255),
+    Contacto_Generado VARCHAR(255),
     Coordenadas VARCHAR(255),
     Credito INT,
-    EstatusPromesa VARCHAR(50),
-    FechaActividad DATETIME,
-    FechaPromesa DATE,
-    MontoPromesa DECIMAL(10, 2),
+    Estatus_Promesa VARCHAR(50),
+    Fecha_Actividad DATETIME,
+    Fecha_Promesa DATE,
+    Monto_Promesa DECIMAL(10, 2),
     Origen VARCHAR(50),
     Producto VARCHAR(50),
     Resultado VARCHAR(50),
     Telefono VARCHAR(20),
     TipoPago VARCHAR(50),
-    UsuarioRegistro VARCHAR(50)
+    Usuario_Registro VARCHAR(50)
 );
 
-CREATE TABLE Stage_Quebrantos (
+CREATE TABLE D6_Stage_Quebrantos (
     Operacion INT,
     Referencia INT,
     Nombre VARCHAR(255),
@@ -536,8 +540,8 @@ CREATE TABLE Stage_Quebrantos (
     vMotive VARCHAR(255)
 );
 
-CREATE TABLE Quebrantos (
-    dbkey INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE D6_Quebrantos (
+	D6_Key int auto_increment primary key not null,
     Operacion INT,
     Referencia INT,
     Nombre VARCHAR(255),
@@ -562,26 +566,10 @@ CREATE TABLE Quebrantos (
     nCommission DECIMAL(10, 2),
     nCommTax DECIMAL(10, 2),
     vMotive VARCHAR(255),
-    Estrategias DECIMAL(10,2),
-    SaldoReal DECIMAL(10, 2),
-    CapitalQuebrantado DECIMAL(10, 2),
-    Recuperacion DECIMAL(10, 2),
-    Mes TINYINT,
-    Año YEAR,
-    QuebrantoContable DECIMAL(10,2),
-    Producto VARCHAR(255),
-    Financiamiento VARCHAR(255),
-    Valid TINYINT,
-    SaldoCapital DECIMAL(10,2),
-    Motivo DECIMAL(10,2),
     FechaGenerado DATETIME
 );
 
-CREATE TABLE ESTRATEGIA (
-    Id_Pago INT NOT NULL
-);
-
-CREATE TABLE Stage_Juicios (
+CREATE TABLE D7_Stage_Juicios (
     Credito_MC INT,
     Decla VARCHAR(255),
     Descripcion_Cierre VARCHAR(255),
@@ -594,7 +582,7 @@ CREATE TABLE Stage_Juicios (
     Fecha_Carga_Inicial TEXT,
     Fecha_Cierre TEXT,
     Fecha_Ultima_Act TEXT,
-    Id_Juicio INT PRIMARY KEY,
+    Id_Juicio INT,
     Juzgado VARCHAR(255),
     Motivo_Cierre VARCHAR(255),
     Producto_MC VARCHAR(50),
@@ -602,7 +590,8 @@ CREATE TABLE Stage_Juicios (
     Validar_Cierre VARCHAR(50)
 );
 
-CREATE TABLE Juicios (
+CREATE TABLE D7_Juicios (
+	D7_Key int auto_increment primary key not null,
     Credito_MC INT,
     Decla VARCHAR(255),
     Descripcion_Cierre VARCHAR(255),
@@ -615,7 +604,7 @@ CREATE TABLE Juicios (
     Fecha_Carga_Inicial DATETIME,
     Fecha_Cierre DATETIME,
     Fecha_Ultima_Act DATETIME,
-    Id_Juicio INT PRIMARY KEY,
+    Id_Juicio INT,
     Juzgado VARCHAR(255),
     Motivo_Cierre VARCHAR(255),
     Producto_MC VARCHAR(50),
@@ -623,7 +612,7 @@ CREATE TABLE Juicios (
     Validar_Cierre VARCHAR(50)
 );
 
-CREATE TABLE Stage_Sistema (
+CREATE TABLE D8_Stage_Sistema (
     Agencia_Asignada_MC VARCHAR(255),
     Agencia_MC INT,
     Bandera_PP_Juicio INT,
@@ -663,7 +652,8 @@ CREATE TABLE Stage_Sistema (
     Usuario_Asignado_Extrajudicial VARCHAR(255)
 );
 
-CREATE TABLE Sistema (
+CREATE TABLE D8_Sistema (
+	D8_Key int auto_increment primary key not null,
     Agencia_Asignada_MC VARCHAR(255),
     Agencia_MC INT,
     Bandera_PP_Juicio INT,
@@ -702,588 +692,497 @@ CREATE TABLE Sistema (
     Usuario_Asignado VARCHAR(255),
     Usuario_Asignado_Extrajudicial VARCHAR(255)
 );
--- --------------------------------Catalogos-----------------------------------------------------------------------
-CREATE TABLE  Dependencia(
+
+CREATE TABLE D9_Stage_Catalogo_Gestores_Area(
+    UsuarioMC VARCHAR(50) NULL,
+    Area VARCHAR(50) NULL,
+    Estatus Int NULL,
+    Perfil VARCHAR(50) NULL
+);
+
+CREATE TABLE D9_Catalogo_Gestores_Area(
+	D9_Key int auto_increment primary key not null,
+    UsuarioMC VARCHAR(50) NULL,
+    Area VARCHAR(50) NULL,
+    Estatus Int NULL,
+    Perfil VARCHAR(50) NULL
+);
+
+CREATE TABLE C1_Dependencia(
+	C1_Key int auto_increment primary key not null,
     Dependencia VARCHAR(100) NULL,
     Abreviatura VARCHAR(100) NULL
 );
 
-CREATE TABLE  Financiamiento(
+CREATE TABLE C2_Financiamiento(
+	C2_Key int auto_increment primary key not null,
     Tipo_Financiamiento VARCHAR(50) NULL,
     Financiamiento VARCHAR(50) NULL,
     Producto VARCHAR(50) NULL
 );
 
-CREATE TABLE Motivo(
+CREATE TABLE C3_Motivo(
+	C3_Key int auto_increment primary key not null,
     Motivo VARCHAR(100) NULL,
     BanderaPago VARCHAR(50) NULL,
     BanderaDependendia VARCHAR(50) NULL,
     Abreviatura VARCHAR(50) NULL
 );
 
-CREATE TABLE CatalogoBancos(
-	Clave VARCHAR(100) NULL,
+CREATE TABLE C4_Catalogo_Bancos(
+	C4_Key int auto_increment primary key not null,
+	Clabe VARCHAR(100) NULL,
 	NombreCorto VARCHAR(100) NULL,
 	RazonSocial VARCHAR(100) NULL
 );
 
-CREATE TABLE CatalogoGestoresArea(
-	UsuarioMC VARCHAR(50) NULL,
-    Area VARCHAR(50) NULL,
-    Estatus Int NULL,
-    Perfil VARCHAR(50) NULL
+CREATE TABLE C5_Referencias (
+	C5_Key int auto_increment primary key not null,
+    Id_Persona INT NOT NULL,  -- Assuming ipersonid is an integer, adjust the type as needed
+    Referencia1 VARCHAR(255),
+    RELACION1 VARCHAR(255),
+    vphonenumber1 VARCHAR(20),
+    Referencia2 VARCHAR(255),
+    RELACION2 VARCHAR(255),
+    vphonenumber2 VARCHAR(20),
+    Referencia3 VARCHAR(255),
+    RELACION3 VARCHAR(255),
+    vphonenumber3 VARCHAR(20),
+    Referencia4 VARCHAR(255),
+    RELACION4 VARCHAR(255),
+    vphonenumber4 VARCHAR(20),
+    Referencia5 VARCHAR(255),
+    RELACION5 VARCHAR(255),
+    vphonenumber5 VARCHAR(20),
+    Referencia6 VARCHAR(255),
+    RELACION6 VARCHAR(255),
+    vphonenumber6 VARCHAR(20),
+    Referencia7 VARCHAR(255),
+    RELACION7 VARCHAR(255),
+    vphonenumber7 VARCHAR(20),
+    Referencia8 VARCHAR(255),
+    RELACION8 VARCHAR(255),
+    vphonenumber8 VARCHAR(20),
+    Referencia9 VARCHAR(255),
+    RELACION9 VARCHAR(255),
+    vphonenumber9 VARCHAR(20),
+    Referencia10 VARCHAR(255),
+    RELACION10 VARCHAR(255),
+    vphonenumber10 VARCHAR(20),
+    Referencia11 VARCHAR(255),
+    RELACION11 VARCHAR(255),
+    vphonenumber11 VARCHAR(20),
+    Referencia12 VARCHAR(255),
+    RELACION12 VARCHAR(255),
+    vphonenumber12 VARCHAR(20),
+    Referencia13 VARCHAR(255),
+    RELACION13 VARCHAR(255),
+    vphonenumber13 VARCHAR(20),
+    Referencia14 VARCHAR(255),
+    RELACION14 VARCHAR(255),
+    vphonenumber14 VARCHAR(20),
+    Referencia15 VARCHAR(255),
+    RELACION15 VARCHAR(255),
+    vphonenumber15 VARCHAR(20),
+    Referencia16 VARCHAR(255),
+    RELACION16 VARCHAR(255),
+    vphonenumber16 VARCHAR(20),
+    Referencia17 VARCHAR(255),
+    RELACION17 VARCHAR(255),
+    vphonenumber17 VARCHAR(20),
+    Referencia18 VARCHAR(255),
+    RELACION18 VARCHAR(255),
+    vphonenumber18 VARCHAR(20),
+    Referencia19 VARCHAR(255),
+    RELACION19 VARCHAR(255),
+    vphonenumber19 VARCHAR(20),
+    Referencia20 VARCHAR(255),
+    RELACION20 VARCHAR(255),
+    vphonenumber20 VARCHAR(20),
+    Referencia21 VARCHAR(255),
+    RELACION21 VARCHAR(255),
+    vphonenumber21 VARCHAR(20),
+    Referencia22 VARCHAR(255),
+    RELACION22 VARCHAR(255),
+    vphonenumber22 VARCHAR(20)
 );
 
-CREATE TABLE CatalogosResultadoAvance(
+CREATE TABLE C6_Catalogo_Resultados_Avances(
+	C6_Key int auto_increment primary key not null,
 	Clave VARCHAR(50) NULL,
     Resultado VARCHAR(50) NULL
 );
 
-CREATE TABLE Demograficos(
-);
-
-CREATE TABLE PagosEstrategiaAcumulados(
+CREATE TABLE CI1_Pagos_Estrategia_Acumulados(
+	CI1_Key int auto_increment primary key not null,
 	IdPago INT NULL
 );
 
-CREATE TABLE EstatusDomi(
+CREATE TABLE CI2_Estatus_Domi(
+	CI2_Key int auto_increment primary key not null,
 	IdCredito INT NULL,
-    Rechazo VARCHAR(50) NULL,
-    MES DATE NULL
+    Rechazo VARCHAR(50) NULL
 );
 
--- --------------------------------Procesos Almacenados------------------------------------------------------------
-DELIMITER //
-
-CREATE PROCEDURE InsertSaldosCarteras()
-BEGIN
-    DECLARE current_period TIME;
-
-    -- Declare exit handler
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        -- Error
-        SELECT 0 AS Status;
-        ROLLBACK;
-    END;
-
-    -- Define current time period
-    SET current_period = CASE
-        WHEN TIME(NOW()) BETWEEN '00:00:00' AND '07:00:00' THEN '07:00:00'
-        WHEN TIME(NOW()) BETWEEN '07:01:00' AND '18:00:00' THEN '18:00:00'
-        WHEN TIME(NOW()) BETWEEN '18:01:00' AND '23:59:59' THEN '23:59:59'
-    END;
-
-    -- Check if a record with today's date and the current period already exists
-    IF EXISTS (
-        SELECT 1
-        FROM Saldos_Cartera
-        WHERE DATE(FechaGenerado) = CURDATE()
-        AND TIME(FechaGenerado) = current_period
-    ) THEN
-        -- Validation failed, return 2
-        SELECT 2 AS Status;
-    ELSE
-        START TRANSACTION;
-
-    -- Insert data from Stage_Saldos_Cartera to Saldos_Cartera if no matching record exists
-    INSERT INTO Saldos_Cartera (
-        Id_Solicitud, Id_Credito, IdPersona, Referencia, Afiliado, Nombre, Monto, Comision, Intereses_Totales, Monto_Total, 
-        Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, 
-        Comision_Pagada, Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
-        Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, Id_Convenio, Dependencia, 
-        Primer_Pago_Teorico, Ultimo_Pago, Tipo_Financiamiento, Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, 
-        Sdo_Insoluto, Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, Sucursal, Fecha_Desembolso, 
-        Frecuencia, Primer_Pago_Real, Ultimo_Pago_c_ListaCobro, Ultimo_Pago_Aplicado, Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, 
-        Periodos_Atraso, Pago, Monto_Ultimo_Pago, Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, Com_Vigente, Com_Vencida, 
-        Clabe, Sig_Pago, Monto_Sig_Pago, vFondeador, Valida_Domi, vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, RFC, vMotiveExt, 
-        iPeriodsExt, vCommentExt, nRetencion, nJoPay, iMaxDays, vMaxDate, nLiquidate, nLiqPrin, nLiqInt, nLiqMor, nLiqCha, 
-        nLiqPrinTran, nLiqIntTran, nLiqMorTran, nLiqChaTran, nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, FechaGenerado
-    )
-    SELECT 
-        Id_Solicitud, Id_Credito, IdPersona, Referencia, Afiliado, Nombre, Monto, Comision, Intereses_Totales, Monto_Total, 
-        Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, 
-        Comision_Pagada, Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
-        Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, Id_Convenio, Dependencia, 
-        CASE 
-            WHEN Primer_Pago_Teorico = '0000-00-00' OR Primer_Pago_Teorico = '' OR Primer_Pago_Teorico = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Primer_Pago_Teorico, '%Y-%m-%d') 
-        END AS Primer_Pago_Teorico, 
-        CASE 
-            WHEN Ultimo_Pago = '0000-00-00' OR Ultimo_Pago = '' OR Ultimo_Pago = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Ultimo_Pago, '%Y-%m-%d') 
-        END AS Ultimo_Pago, 
-        Tipo_Financiamiento, Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, Sdo_Insoluto, 
-        Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, Sucursal, 
-        CASE 
-            WHEN Fecha_Desembolso = '0000-00-00' OR Fecha_Desembolso = '' OR Fecha_Desembolso = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Fecha_Desembolso, '%Y-%m-%d') 
-        END AS Fecha_Desembolso, 
-        Frecuencia, 
-        CASE 
-            WHEN Primer_Pago_Real = '0000-00-00' OR Primer_Pago_Real = '' OR Primer_Pago_Real = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Primer_Pago_Real, '%Y-%m-%d') 
-        END AS Primer_Pago_Real, 
-        CASE 
-            WHEN Ultimo_Pago_c_ListaCobro = '0000-00-00' OR Ultimo_Pago_c_ListaCobro = '' OR Ultimo_Pago_c_ListaCobro = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Ultimo_Pago_c_ListaCobro, '%Y-%m-%d') 
-        END AS Ultimo_Pago_c_ListaCobro, 
-        CASE 
-            WHEN Ultimo_Pago_Aplicado = '0000-00-00' OR Ultimo_Pago_Aplicado = '' OR Ultimo_Pago_Aplicado = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Ultimo_Pago_Aplicado, '%Y-%m-%d') 
-        END AS Ultimo_Pago_Aplicado, 
-        Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, Pago, Monto_Ultimo_Pago, Tasa_Int_Anual, Gestor, Motivo, Banco, 
-        Estado, Ciudad, Com_Vigente, Com_Vencida, Clabe, 
-        CASE 
-            WHEN Sig_Pago = '0000-00-00' OR Sig_Pago = '' OR Sig_Pago = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Sig_Pago, '%Y-%m-%d') 
-        END AS Sig_Pago, 
-        Monto_Sig_Pago, vFondeador, Valida_Domi, vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, RFC, vMotiveExt, iPeriodsExt, 
-        vCommentExt, nRetencion, nJoPay, iMaxDays, 
-        CASE 
-            WHEN vMaxDate = '0000-00-00' OR vMaxDate = '' OR vMaxDate = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(vMaxDate, '%Y-%m-%d') 
-        END AS vMaxDate, 
-        nLiquidate, nLiqPrin, nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, nLiqChaTran, nLiqRetTran, 
-        vScoreBuro, vCollectStatus, nCAT, vOpTable, CONCAT(CURDATE(), ' ', current_period) AS FechaGenerado
-    FROM Stage_Saldos_Cartera;
-
-        -- Success
-        SELECT 1 AS Status;
-
-        COMMIT;
-    END IF;
-END //
-
-DELIMITER ;
-
-DELIMITER //
-
-CREATE PROCEDURE InsertSaldosContables()
-BEGIN
-    DECLARE current_period TIME;
-
-    -- Declare exit handler
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        -- Error
-        SELECT 0 AS Status;
-        ROLLBACK;
-    END;
-
-    -- Define current time period
-    SET current_period = CASE
-        WHEN TIME(NOW()) BETWEEN '00:00:00' AND '07:00:00' THEN '07:00:00'
-        WHEN TIME(NOW()) BETWEEN '07:01:00' AND '18:00:00' THEN '18:00:00'
-        WHEN TIME(NOW()) BETWEEN '18:01:00' AND '23:59:59' THEN '23:59:59'
-    END;
-
-    -- Check if a record with today's date and the current period already exists
-    IF EXISTS (
-        SELECT 1
-        FROM Saldos_Contables
-        WHERE DATE(FechaGenerado) = CURDATE()
-        AND TIME(FechaGenerado) = current_period
-    ) THEN
-        -- Validation failed, return 2
-        SELECT 2 AS Status;
-    ELSE
-        START TRANSACTION;
-
-    -- Insert data from Stage_Saldos_Contables to Saldos_Contables if no matching record exists
-    INSERT INTO Saldos_Contables (
-        Id_Credito, Referencia, Nombre, Id_Sucursal, Sucursal, Id_Convenio, Convenio, Financiamiento, Estatus_Inicial, 
-        Estatus_Final, Fecha_Apertura, Fecha_Terminacion, Importe, Dias_Atraso, Cuotas_Atrasadas, Periodos_Atraso, 
-        Pagos_Sostenidos, Pago, Frecuencia, Fecha_Ultimo_Pago, Importe_Ultimo_Pago, Saldo_Inicial_Capital, Otorgado, Pagos, 
-        Ajuste_Cargo_Capital, Ajuste_Abono_Capital, Saldo_Final_Capital, Calculo, Diferencia, Capital_Vigente, Capital_Vencido, 
-        Saldo_Inicial_Interes, Devengamiento, Pagos_Interes, Ajuste_Cargo_Interes, Ajuste_Abono_Interes, Interes_No_Devengado, 
-        Saldo_Final_Interes, Calculo_Interes, Diferencia_Interes, Interes_Devengado, IVA_Interes_Devengado, Interes_No_DevengadoB, 
-        Fecha_Cartera_Vencida, Saldo_Contable, Saldo_Insoluto, Porc_Provision, Reserva, nCAT, vOpTable, Status, FechaGenerado
-    )
-    SELECT 
-        Id_Credito, Referencia, Nombre, Id_Sucursal, Sucursal, Id_Convenio, Convenio, Financiamiento, Estatus_Inicial, 
-        Estatus_Final, 
-        CASE 
-            WHEN Fecha_Apertura = '0000-00-00' OR Fecha_Apertura = '' OR Fecha_Apertura = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Fecha_Apertura, '%Y-%m-%d') 
-        END AS Fecha_Apertura, 
-        CASE 
-            WHEN Fecha_Terminacion = '0000-00-00' OR Fecha_Terminacion = '' OR Fecha_Terminacion = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Fecha_Terminacion, '%Y-%m-%d') 
-        END AS Fecha_Terminacion, 
-        Importe, Dias_Atraso, Cuotas_Atrasadas, Periodos_Atraso, Pagos_Sostenidos, Pago, Frecuencia, 
-        CASE 
-            WHEN Fecha_Ultimo_Pago = '0000-00-00' OR Fecha_Ultimo_Pago = '' OR Fecha_Ultimo_Pago = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Fecha_Ultimo_Pago, '%Y-%m-%d') 
-        END AS Fecha_Ultimo_Pago, 
-        Importe_Ultimo_Pago, Saldo_Inicial_Capital, Otorgado, Pagos, Ajuste_Cargo_Capital, Ajuste_Abono_Capital, 
-        Saldo_Final_Capital, Calculo, Diferencia, Capital_Vigente, Capital_Vencido, Saldo_Inicial_Interes, Devengamiento, 
-        Pagos_Interes, Ajuste_Cargo_Interes, Ajuste_Abono_Interes, Interes_No_Devengado, Saldo_Final_Interes, Calculo_Interes, 
-        Diferencia_Interes, Interes_Devengado, IVA_Interes_Devengado, Interes_No_DevengadoB, 
-        CASE 
-            WHEN Fecha_Cartera_Vencida = '0000-00-00' OR Fecha_Cartera_Vencida = '' OR Fecha_Cartera_Vencida = '0.00' THEN NULL 
-            ELSE STR_TO_DATE(Fecha_Cartera_Vencida, '%Y-%m-%d') 
-        END AS Fecha_Cartera_Vencida, 
-        Saldo_Contable, Saldo_Insoluto, Porc_Provision, Reserva, nCAT, vOpTable, Status, 
-        CONCAT(CURDATE(), ' ', current_period) AS FechaGenerado
-    FROM Stage_Saldos_Contables;
-
-        -- Success
-        SELECT 1 AS Status;
-
-        COMMIT;
-    END IF;
-END //
-
-DELIMITER ;
-
-DELIMITER //
-
-CREATE PROCEDURE InsertAplicacionPagos()
-BEGIN
-    -- Declare exit handler
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        -- Error
-        SELECT 0 AS Status;
-        ROLLBACK;
-    END;
-
-    START TRANSACTION;
-
-    -- Insert data from Stage_Aplicacion_Pagos to Aplicacion_Pagos if no matching record exists
-    INSERT INTO Aplicacion_Pagos (
-        Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento, Origen_de_Movimiento, 
-        Fecha_Pago, Fecha_Aplicacion, Fecha_Deposito, Status, Pago, Capital, Interes, IVA_Int, Comision_Financiada, 
-        IVA_Comision_Financ, Moratorios, IVA_Mora, Pago_Tardio, IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, 
-        IVA_Com_Liquidacion, Retencion_X_Admon, IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
-    )
-    SELECT 
-        Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento, Origen_de_Movimiento, 
-        CASE 
-            WHEN Fecha_Pago = '' THEN NULL 
-            WHEN Fecha_Pago LIKE '____-__-__' THEN Fecha_Pago
-            ELSE STR_TO_DATE(Fecha_Pago, '%d/%m/%Y') 
-        END AS Fecha_Pago, 
-        CASE 
-            WHEN Fecha_Aplicacion = '' THEN NULL 
-            WHEN Fecha_Aplicacion LIKE '____-__-__' THEN Fecha_Aplicacion
-            ELSE STR_TO_DATE(Fecha_Aplicacion, '%d/%m/%Y') 
-        END AS Fecha_Aplicacion, 
-        CASE 
-            WHEN Fecha_Deposito = '' THEN NULL 
-            WHEN Fecha_Deposito LIKE '____-__-__' THEN Fecha_Deposito
-            ELSE STR_TO_DATE(Fecha_Deposito, '%d/%m/%Y') 
-        END AS Fecha_Deposito, 
-        Status, Pago, Capital, Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, Moratorios, IVA_Mora, 
-        Pago_Tardio, IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon, 
-        IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
-    FROM Stage_Aplicacion_Pagos
-    WHERE Id_Pago NOT IN (SELECT Id_Pago FROM Aplicacion_Pagos);
-
-    -- Success
-    SELECT 1 AS Status;
-
-    COMMIT;
-END //
-
-DELIMITER ;
-
-DELIMITER //
-
-CREATE PROCEDURE InsertOtorgamientoCreditos()
-BEGIN
-    -- Declare exit handler
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        -- Error
-        SELECT 0 AS Status;
-        ROLLBACK;
-    END;
-
-    START TRANSACTION;
-
-    -- Create temporary table
-    CREATE TEMPORARY TABLE Temp_Otorgamiento_Creditos AS
-    SELECT * FROM Stage_Otorgamiento_Creditos;
-
-    -- Insert data from Temp_Otorgamiento_Creditos to Otorgamiento_Creditos
-    INSERT INTO Otorgamiento_Creditos (
-        Id_Credito, Referencia, Nombre, Fecha_Apertura, F_Cobro, Id_Convenio, Convenio, Id_Sucursal, Sucursal, 
-        Capital, Primer_Pago, Comision, IVA, Cobertura, IVA_Cobertura, Disposicion, Monto_Retenido, Pago_de_Deuda, 
-        Comision_Financiada, IVA_Comision_Financiada, Solicitud, Vendedor, Nombre_Vendedor, TipoVendedor, 
-        vSupervisorId, vSupName, Producto, Descripcion_Tasa, Persona, Plazo, Id_Producto, vCampaign, 
-        Tipo_de_Financiamiento, vFinancingTypeId, vAliado
-    )
-    SELECT 
-        t.Id_Credito, t.Referencia, t.Nombre, 
-        CASE 
-            WHEN t.Fecha_Apertura = '' THEN NULL 
-            WHEN t.Fecha_Apertura LIKE '____-__-__' THEN t.Fecha_Apertura
-            ELSE STR_TO_DATE(t.Fecha_Apertura, '%d/%m/%Y') 
-        END AS Fecha_Apertura, 
-        CASE 
-            WHEN t.F_Cobro = '' THEN NULL 
-            WHEN t.F_Cobro LIKE '____-__-__' THEN t.F_Cobro
-            ELSE STR_TO_DATE(t.F_Cobro, '%d/%m/%Y') 
-        END AS F_Cobro, 
-        t.Id_Convenio, t.Convenio, t.Id_Sucursal, t.Sucursal, 
-        t.Capital, 
-        CASE 
-            WHEN t.Primer_Pago = '' THEN NULL 
-            WHEN t.Primer_Pago LIKE '____-__-__' THEN t.Primer_Pago
-            ELSE STR_TO_DATE(t.Primer_Pago, '%d/%m/%Y') 
-        END AS Primer_Pago, 
-        t.Comision, t.IVA, t.Cobertura, t.IVA_Cobertura, t.Disposicion, t.Monto_Retenido, t.Pago_de_Deuda, 
-        t.Comision_Financiada, t.IVA_Comision_Financiada, t.Solicitud, t.Vendedor, t.Nombre_Vendedor, t.TipoVendedor, 
-        t.vSupervisorId, t.vSupName, t.Producto, t.Descripcion_Tasa, t.Persona, t.Plazo, t.Id_Producto, t.vCampaign, 
-        t.Tipo_de_Financiamiento, t.vFinancingTypeId, t.vAliado
-    FROM Temp_Otorgamiento_Creditos t
-    LEFT JOIN Otorgamiento_Creditos o
-    ON t.Id_Credito = o.Id_Credito
-    WHERE o.Id_Credito IS NULL;
-
-    -- Drop temporary table
-    DROP TEMPORARY TABLE IF EXISTS Temp_Otorgamiento_Creditos;
-
-    -- Success
-    SELECT 1 AS Status;
-
-    COMMIT;
-END //
-
-DELIMITER ;
-
-DELIMITER //
-
-CREATE PROCEDURE InsertGestiones()
-BEGIN
-    -- Declare exit handler
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        -- Error
-        SELECT 0 AS Status;
-        ROLLBACK;
-    END;
-
-    START TRANSACTION;
-
-    -- Insert new entries from Stage_Gestiones to Gestiones
-    INSERT INTO Gestiones (
-        AgenciaRegistro,
-        CausaNoPago,
-        CausaNoDomiciliacion,
-        CodigoAccion,
-        CodigoResultado,
-        Comentarios,
-        ContactoGenerado,
-        Coordenadas,
-        Credito,
-        EstatusPromesa,
-        FechaActividad,
-        FechaPromesa,
-        MontoPromesa,
-        Origen,
-        Producto,
-        Resultado,
-        Telefono,
-        TipoPago,
-        UsuarioRegistro
-    )
-    SELECT
-        s.AgenciaRegistro,
-        s.CausaNoPago,
-        s.CausaNoDomiciliacion,
-        s.CodigoAccion,
-        s.CodigoResultado,
-        s.Comentarios,
-        s.ContactoGenerado,
-        s.Coordenadas,
-        s.Credito,
-        s.EstatusPromesa,
-        STR_TO_DATE(s.FechaActividad, '%Y-%m-%d %H:%i:%s') AS FechaActividad,
-        CASE
-            WHEN s.FechaPromesa IS NULL OR s.FechaPromesa = '' THEN NULL
-            ELSE STR_TO_DATE(s.FechaPromesa, '%Y-%m-%d %H:%i:%s')
-        END AS FechaPromesa,
-        s.MontoPromesa,
-        s.Origen,
-        s.Producto,
-        s.Resultado,
-        s.Telefono,
-        s.TipoPago,
-        s.UsuarioRegistro
-    FROM Stage_Gestiones s
-    LEFT JOIN Gestiones g ON 
-        s.AgenciaRegistro = g.AgenciaRegistro AND
-        s.CausaNoPago = g.CausaNoPago AND
-        s.CausaNoDomiciliacion = g.CausaNoDomiciliacion AND
-        s.CodigoAccion = g.CodigoAccion AND
-        s.CodigoResultado = g.CodigoResultado AND
-        s.Comentarios = g.Comentarios AND
-        s.ContactoGenerado = g.ContactoGenerado AND
-        s.Coordenadas = g.Coordenadas AND
-        s.Credito = g.Credito AND
-        s.EstatusPromesa = g.EstatusPromesa AND
-        STR_TO_DATE(s.FechaActividad, '%Y-%m-%d %H:%i:%s') = g.FechaActividad AND
-        (CASE
-            WHEN s.FechaPromesa IS NULL OR s.FechaPromesa = '' THEN NULL
-            ELSE STR_TO_DATE(s.FechaPromesa, '%Y-%m-%d %H:%i:%s')
-        END) = g.FechaPromesa AND
-        s.MontoPromesa = g.MontoPromesa AND
-        s.Origen = g.Origen AND
-        s.Producto = g.Producto AND
-        s.Resultado = g.Resultado AND
-        s.Telefono = g.Telefono AND
-        s.TipoPago = g.TipoPago AND
-        s.UsuarioRegistro = g.UsuarioRegistro
-    WHERE g.AgenciaRegistro IS NULL;
-
-    -- Success
-    SELECT 1 AS Status;
-
-    COMMIT;
-END //
-
-DELIMITER ;
-
-DELIMITER //
-
-CREATE PROCEDURE InsertJuicios()
-BEGIN
-    -- Declare exit handler
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        -- Error
-        SELECT 0 AS Status;
-        ROLLBACK;
-    END;
-
-    START TRANSACTION;
-
-    -- Truncate the final table
-    TRUNCATE TABLE Juicios;
-
-    -- Insert data from Stage_Juicios to Juicios
-    INSERT INTO Juicios (
-        Credito_MC, Decla, Descripcion_Cierre, Dias_Activo, Dias_Caducar, Estatus, Etapa_Procesal, Expediente, 
-        Fecha_Actualizacion, Fecha_Carga_Inicial, Fecha_Cierre, Fecha_Ultima_Act, Id_Juicio, Juzgado, Motivo_Cierre, 
-        Producto_MC, Tipo_Juicio, Validar_Cierre
-    )
-    SELECT 
-        Credito_MC, 
-        Decla, 
-        Descripcion_Cierre, 
-        Dias_Activo, 
-        Dias_Caducar, 
-        Estatus, 
-        Etapa_Procesal, 
-        Expediente, 
-        CASE 
-            WHEN Fecha_Actualizacion = '' THEN NULL 
-            ELSE Fecha_Actualizacion 
-        END, 
-        CASE 
-            WHEN Fecha_Carga_Inicial = '' THEN NULL 
-            ELSE Fecha_Carga_Inicial 
-        END, 
-        CASE 
-            WHEN Fecha_Cierre = '' THEN NULL 
-            ELSE Fecha_Cierre 
-        END, 
-        CASE 
-            WHEN Fecha_Ultima_Act = '' THEN NULL 
-            ELSE Fecha_Ultima_Act 
-        END, 
-        Id_Juicio, 
-        Juzgado, 
-        Motivo_Cierre, 
-        Producto_MC, 
-        Tipo_Juicio, 
-        Validar_Cierre
-    FROM Stage_Juicios;
-
-    -- Success
-    SELECT 1 AS Status;
-
-    COMMIT;
-END //
-
-DELIMITER ;
-
-DELIMITER //
-
-CREATE PROCEDURE InsertSistema()
-BEGIN
-    -- Declare exit handler
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        -- Error
-        SELECT 0 AS Status;
-        ROLLBACK;
-    END;
-
-    START TRANSACTION;
-
-    -- Truncate the final table
-    TRUNCATE TABLE Sistema;
-
-    -- Insert data from Stage_Sistema to Sistema
-    INSERT INTO Sistema (
-        Agencia_Asignada_MC, Agencia_MC, Bandera_PP_Juicio, Codigo_MC, Credito_MC, Cuenta_Al_Corriente, 
-        Dias_en_la_instancia_actual, Dias_Para_Siguiente_Pago, Estatus_MC, Estrategia, Excepciones_MC, 
-        Fecha_de_Asignacion_CallCenter, Fecha_de_Asignacion_Visita, Fecha_De_Captura_de_Juicio, 
-        Fecha_de_Ultima_Visita, Fecha_Promesa_MC, Fecha_Ult_Gestion_MC, Importe_Pago_X2, Importe_Pago_X3, 
-        Importe_Pago_X4, Importe_Pago_X6, Monto_Promesa_MC, No_Gestiones, No_Visitas, Nombre_Agencia_MC, 
-        Nombre_Del_Deudor_MC, Nombre_Instancia_MC, Producto_MC, Quita_Exclusiva, Resultado_MC, 
-        Resultado_Visita_MC, Saldo_Menor, Semaforo_Gestion, Ult_Causa_No_Domiciliacion, Ult_Causa_No_Pago, 
-        Usuario_Asignado, Usuario_Asignado_Extrajudicial
-    )
-    SELECT 
-        Agencia_Asignada_MC, Agencia_MC, Bandera_PP_Juicio, Codigo_MC, Credito_MC, Cuenta_Al_Corriente, 
-        Dias_en_la_instancia_actual, Dias_Para_Siguiente_Pago, Estatus_MC, Estrategia, Excepciones_MC, 
-        CASE 
-            WHEN Fecha_de_Asignacion_CallCenter = '' THEN NULL 
-            ELSE Fecha_de_Asignacion_CallCenter 
-        END, 
-        CASE 
-            WHEN Fecha_de_Asignacion_Visita = '' THEN NULL 
-            ELSE Fecha_de_Asignacion_Visita 
-        END, 
-        CASE 
-            WHEN Fecha_De_Captura_de_Juicio = '' THEN NULL 
-            ELSE Fecha_De_Captura_de_Juicio 
-        END, 
-        CASE 
-            WHEN Fecha_de_Ultima_Visita = '' THEN NULL 
-            ELSE Fecha_de_Ultima_Visita 
-        END, 
-        CASE 
-            WHEN Fecha_Promesa_MC = '' THEN NULL 
-            ELSE Fecha_Promesa_MC 
-        END, 
-        CASE 
-            WHEN Fecha_Ult_Gestion_MC = '' THEN NULL 
-            ELSE Fecha_Ult_Gestion_MC 
-        END, 
-        Importe_Pago_X2, Importe_Pago_X3, Importe_Pago_X4, Importe_Pago_X6, Monto_Promesa_MC, No_Gestiones, 
-        No_Visitas, Nombre_Agencia_MC, Nombre_Del_Deudor_MC, Nombre_Instancia_MC, Producto_MC, Quita_Exclusiva, 
-        Resultado_MC, Resultado_Visita_MC, Saldo_Menor, Semaforo_Gestion, Ult_Causa_No_Domiciliacion, 
-        Ult_Causa_No_Pago, Usuario_Asignado, Usuario_Asignado_Extrajudicial
-    FROM Stage_Sistema;
-
-    -- Success
-    SELECT 1 AS Status;
-
-    COMMIT;
-END //
-
-DELIMITER ;
-
-
-
-
-
-
-
-
+CREATE TABLE CI3_Plazas(
+	CI3_Key int auto_increment primary key not null,
+    Id_Credito INT not null,
+    Plaza VARCHAR(100)
+);
+
+CREATE TABLE B1_Demograficos(
+	B1_Key int auto_increment primary key not null,
+    Id_Persona INT NOT NULL,
+    vName VARCHAR(120) NULL,
+    vFirstName VARCHAR(30) NULL,
+    vSecondName VARCHAR(30) NULL,
+    vFLastName VARCHAR(30) NULL,
+    vSLastName VARCHAR(30) NULL,
+    vOpIdType VARCHAR(20) NULL,
+    vIdNumber VARCHAR(20) NULL,
+    vTreasuryId VARCHAR(20) NULL,
+    vStateId VARCHAR(10) NULL,
+    vLegalId VARCHAR(20) NULL,
+    vOpSex VARCHAR(20) NULL,
+    vOpNationality VARCHAR(20) NULL,
+    vOpMaritalStatus VARCHAR(20) NULL,
+    vOpMaritalRegime VARCHAR(20) NULL,
+    vBirthDate VARCHAR(20) NULL,
+    vEMail VARCHAR(50) NULL,
+    iDependents INT NULL,
+    vOpEducation VARCHAR(20) NULL,
+    vSpFirstName VARCHAR(30) NULL,
+    vSpSecondName VARCHAR(30) NULL,
+    vSpFLastName VARCHAR(30) NULL,
+    vSpSLastName VARCHAR(30) NULL,
+    vMobile VARCHAR(20) NULL,
+    vOpPropTypeAd VARCHAR(20) NULL,
+    vStreetAd VARCHAR(50) NULL,
+    vExtNumberAd VARCHAR(20) NULL,
+    vIntNumberAd VARCHAR(20) NULL,
+    vCornerAd VARCHAR(50) NULL,
+    vCCornerAd VARCHAR(50) NULL,
+    vNeighborhoodAd VARCHAR(50) NULL,
+    vTownshipAd VARCHAR(50) NULL,
+    vCountryIdAd VARCHAR(10) NULL,
+    vCityAd VARCHAR(50) NULL,
+    vStateIdAd VARCHAR(10) NULL,
+    vZoneAd VARCHAR(50) NULL,
+    iZipAd INT NULL,
+    vPhoneNumberAd VARCHAR(20) NULL,
+    iYearsAd INT NULL,
+    iMonthsAd INT NULL,
+    vCompanyJo VARCHAR(50) NULL,
+    nPayJo DECIMAL(15, 2) NULL,
+    vPhoneNumberJo VARCHAR(20) NULL,
+    vExtensionNumberJo VARCHAR(10) NULL,
+    vSectorIdJo VARCHAR(10) NULL,
+    vSectorActivityIdJo VARCHAR(10) NULL,
+    vBossJo VARCHAR(50) NULL,
+    vPositionJo VARCHAR(50) NULL,
+    iYearsJo INT NULL,
+    iMonthsJo INT NULL,
+    vOpEmployeeTypeJo VARCHAR(20) NULL,
+    vStreetJo VARCHAR(50) NULL,
+    vExtNumberJo VARCHAR(20) NULL,
+    vIntNumberJo VARCHAR(20) NULL,
+    vCornerJo VARCHAR(50) NULL,
+    vCCornerJo VARCHAR(50) NULL,
+    vNeighborhoodJo VARCHAR(50) NULL,
+    vTownshipJo VARCHAR(50) NULL,
+    vCountryIdJo VARCHAR(10) NULL,
+    vCityJo VARCHAR(50) NULL,
+    vStateIdJo VARCHAR(10) NULL,
+    vZoneJo VARCHAR(50) NULL,
+    iZipJo INT NULL,
+    vOpTypeJo VARCHAR(20) NULL,
+    vOpBusiness VARCHAR(20) NULL,
+    vOpLocation VARCHAR(20) NULL,
+    vOpOwnership VARCHAR(20) NULL,
+    vOpRelationType1 VARCHAR(20) NULL,
+    vFirstNameRe1 VARCHAR(30) NULL,
+    vSecondNameRe1 VARCHAR(30) NULL,
+    vFLastNameRe1 VARCHAR(30) NULL,
+    vSLastNameRe1 VARCHAR(30) NULL,
+    vPhoneNumberRe1 VARCHAR(20) NULL,
+    iYearsRe1 INT NULL,
+    iMonthsRe1 INT NULL,
+    vStreetRe1 VARCHAR(50) NULL,
+    vExtNumberRe1 VARCHAR(20) NULL,
+    vIntNumberRe1 VARCHAR(20) NULL,
+    vCornerRe1 VARCHAR(50) NULL,
+    vCCornerRe1 VARCHAR(50) NULL,
+    vNeighborhoodRe1 VARCHAR(50) NULL,
+    vTownshipRe1 VARCHAR(50) NULL,
+    vCityRe1 VARCHAR(50) NULL,
+    vStateIdRe1 VARCHAR(10) NULL,
+    vCountryIdRe1 VARCHAR(10) NULL,
+    vZoneRe1 VARCHAR(50) NULL,
+    iZipRe1 INT NULL,
+    vOpRelationType2 VARCHAR(20) NULL,
+    vFirstNameRe2 VARCHAR(30) NULL,
+    vSecondNameRe2 VARCHAR(30) NULL,
+    vFLastNameRe2 VARCHAR(30) NULL,
+    vSLastNameRe2 VARCHAR(30) NULL,
+    vPhoneNumberRe2 VARCHAR(20) NULL,
+    iYearsRe2 INT NULL,
+    iMonthsRe2 INT NULL,
+    vStreetRe2 VARCHAR(50) NULL,
+    vExtNumberRe2 VARCHAR(20) NULL,
+    vIntNumberRe2 VARCHAR(20) NULL,
+    vCornerRe2 VARCHAR(50) NULL,
+    vCCornerRe2 VARCHAR(50) NULL,
+    vNeighborhoodRe2 VARCHAR(50) NULL,
+    vTownshipRe2 VARCHAR(50) NULL,
+    vCityRe2 VARCHAR(50) NULL,
+    vStateIdRe2 VARCHAR(10) NULL,
+    vCountryIdRe2 VARCHAR(10) NULL,
+    vZoneRe2 VARCHAR(50) NULL,
+    iZipRe2 INT NULL,
+    vOpRelationType3 VARCHAR(20) NULL,
+    vFirstNameRe3 VARCHAR(30) NULL,
+    vSecondNameRe3 VARCHAR(30) NULL,
+    vFLastNameRe3 VARCHAR(30) NULL,
+    vSLastNameRe3 VARCHAR(30) NULL,
+    vPhoneNumberRe3 VARCHAR(20) NULL,
+    iYearsRe3 INT NULL,
+    iMonthsRe3 INT NULL,
+    vStreetRe3 VARCHAR(50) NULL,
+    vExtNumberRe3 VARCHAR(20) NULL,
+    vIntNumberRe3 VARCHAR(20) NULL,
+    vCCornerRe3 VARCHAR(50) NULL,
+    vCornerRe3 VARCHAR(50) NULL,
+    vNeighborhoodRe3 VARCHAR(50) NULL,
+    vTownshipRe3 VARCHAR(50) NULL,
+    vCityRe3 VARCHAR(50) NULL,
+    vStateIdRe3 VARCHAR(10) NULL,
+    vCountryIdRe3 VARCHAR(10) NULL,
+    vZoneRe3 VARCHAR(50) NULL,
+    iZipRe3 INT NULL,
+    vOpRelationType4 VARCHAR(20) NULL,
+    vFirstNameRe4 VARCHAR(30) NULL,
+    vSecondNameRe4 VARCHAR(30) NULL,
+    vFLastNameRe4 VARCHAR(30) NULL,
+    vSLastNameRe4 VARCHAR(30) NULL,
+    vPhoneNumberRe4 VARCHAR(20) NULL,
+    iYearsRe4 INT NULL,
+    iMonthsRe4 INT NULL,
+    vStreetRe4 VARCHAR(50) NULL,
+    vExtNumberRe4 VARCHAR(20) NULL,
+    vIntNumberRe4 VARCHAR(20) NULL,
+    vCornerRe4 VARCHAR(50) NULL,
+    vCCornerRe4 VARCHAR(50) NULL,
+    vNeighborhoodRe4 VARCHAR(50) NULL,
+    vTownshipRe4 VARCHAR(50) NULL,
+    vCityRe4 VARCHAR(50) NULL,
+    vStateIdRe4 VARCHAR(10) NULL,
+    vCountryIdRe4 VARCHAR(10) NULL,
+    vZoneRe4 VARCHAR(50) NULL,
+    iZipRe4 INT NULL,
+    vOpCommType1 VARCHAR(20) NULL,
+    vCompanyCom1 VARCHAR(50) NULL,
+    vReferenceCom1 VARCHAR(20) NULL,
+    nAmountCom1 DECIMAL(15, 2) NULL,
+    nBalanceCom1 DECIMAL(15, 2) NULL,
+    iYearsCom1 INT NULL,
+    iMonthsCom1 INT NULL,
+    vOpCommType2 VARCHAR(20) NULL,
+    vCompanyCom2 VARCHAR(50) NULL,
+    vReferenceCom2 VARCHAR(20) NULL,
+    nAmountCom2 DECIMAL(15, 2) NULL,
+    nBalanceCom2 DECIMAL(15, 2) NULL,
+    iYearsCom2 INT NULL,
+    iMonthsCom2 INT NULL,
+    vOpCommType3 VARCHAR(20) NULL,
+    vCompanyCom3 VARCHAR(50) NULL,
+    vReferenceCom3 VARCHAR(20) NULL,
+    nAmountCom3 DECIMAL(15, 2) NULL,
+    nBalanceCom3 DECIMAL(15, 2) NULL,
+    iYearsCom3 INT NULL,
+    iMonthsCom3 INT NULL,
+    vOpCommType4 VARCHAR(20) NULL,
+    vCompanyCom4 VARCHAR(50) NULL,
+    vReferenceCom4 VARCHAR(20) NULL,
+    nAmountCom4 DECIMAL(15, 2) NULL,
+    nBalanceCom4 DECIMAL(15, 2) NULL,
+    iYearsCom4 INT NULL,
+    iMonthsCom4 INT NULL,
+    dtInsert DATETIME NULL,
+    dtUpdate DATETIME NULL
+);
+
+CREATE TABLE R1_Quebrantos_Calculado(
+	R1_Key int auto_increment primary key not null,
+    Operacion INT,
+    Referencia INT,
+    Nombre VARCHAR(255),
+    Convenio VARCHAR(255),
+    vFinancingtypeid VARCHAR(50),
+    KVigente DECIMAL(10, 2),
+    KVencido DECIMAL(10, 2),
+    IntVencido DECIMAL(10, 2),
+    IVAIntVencido DECIMAL(10, 2),
+    IntVencidoCO DECIMAL(10, 2),
+    IVAIntVencidoCO DECIMAL(10, 2),
+    TotalQuebranto DECIMAL(10, 2),
+    PagosRealizados DECIMAL(10, 2),
+    SdoPendiente DECIMAL(10, 2),
+    IntXDevengar DECIMAL(10, 2),
+    SdoTotalXPagar DECIMAL(10, 2),
+    FechaQuebranto VARCHAR(10),
+    UltPagoTeorico VARCHAR(10),
+    UltimoPago VARCHAR(10),
+    UltPagoApl VARCHAR(10),
+    Gestor VARCHAR(255),
+    nCommission DECIMAL(10, 2),
+    nCommTax DECIMAL(10, 2),
+    vMotive VARCHAR(255),
+    TotalEstrategia DECIMAL(18, 2),
+    SaldoReal DECIMAL(18, 2),
+    CapitalQuebrantado DECIMAL(18, 2),
+    Recuperacion DECIMAL(18, 2),
+    Month INT,
+    Year INT,
+    QuebrantoContable DECIMAL(18, 2),
+    Producto VARCHAR(255),
+    Financiamiento VARCHAR(50),
+    Valid INT,
+    SaldoCapital DECIMAL(18, 2),
+    Motivo DECIMAL(18, 2),
+	FechaGenerado DATETIME
+);
+
+CREATE TABLE R2_BDops (
+	R2_Key int auto_increment primary key not null,
+    Id_Solicitud INT,
+    Id_Credito INT,
+    Id_Persona INT,
+    Antiguedad_Cliente DATETIME,
+    Capital_Total_Dispersado DECIMAL(10, 2),
+    Capital_Total_Dispersado_Credito DECIMAL(10, 2),
+    Pago_Total_Cliente DECIMAL(10, 2),
+    Pago_Total_Credito DECIMAL(10, 2),
+    PagadoVsDispersado DECIMAL(10, 2),
+    Pago_Mes_Vigente DECIMAL(10, 2),
+    Cuotas_Pagadas_Mes_Vigente INT,
+    Rango_Pagado_Mes_Vigente VARCHAR(50),
+    Pago_Mes_Anterior DECIMAL(10, 2),
+    Cuotas_Pagadas_Mes_Anterior INT,
+    Rango_Pagado_Mes_Anterior VARCHAR(50),
+    Pago_30_Dias DECIMAL(10, 2),
+    Cuotas_Pagadas_30_Dias INT,
+    Rango_Pagado_30_Dias VARCHAR(50),
+    Pago_15_Dias DECIMAL(10, 2),
+    Cuotas_Pagadas_15_Dias INT,
+    Rango_Pagado_15_Dias VARCHAR(50),
+    Bandera VARCHAR(50),
+    Score INT,
+    Nombre VARCHAR(100),
+    Monto DECIMAL(10, 2),
+    Monto_Total DECIMAL(10, 2),
+    Pagos INT,
+    AmortPagadas INT,
+    Avance DECIMAL(5, 2),
+    Rango_Avance VARCHAR(50),
+    Cuotas_Pag_Rango VARCHAR(50),
+    vFondeador INT,
+    Dependencia VARCHAR(100),
+    UN_Dependencia VARCHAR(100),
+    Tipo_Financiamiento VARCHAR(50),
+    UN_Financiamiento VARCHAR(50),
+    Sucursal VARCHAR(100),
+    Nombre_Vendedor VARCHAR(100),
+    Nombre_Supervisor VARCHAR(100),
+    F_Desembolso DATETIME,
+    Frecuencia VARCHAR(50),
+    Tasa_Int_Anual DECIMAL(5, 2),
+    Producto VARCHAR(100),
+    Estatus VARCHAR(50),
+    EstatusDef INT,
+    Propenso_a_Castigo BOOLEAN,
+    Mes_Quebranto INT,
+    TotalCreditos INT,
+    Creditos_Activo INT,
+    Creditos_Castigado INT,
+    Creditos_Cerrado INT,
+    Etapa_Legal VARCHAR(100),
+    Etapa_Legal_MC VARCHAR(100),
+    Motivo VARCHAR(100),
+    Bandera_Pago_No_Pago_Nómina VARCHAR(50),
+    Bandera_Baja_Dependencia VARCHAR(50),
+    Abreviatura VARCHAR(50),
+    Estado VARCHAR(50),
+    Ciudad VARCHAR(50),
+    Plaza VARCHAR(50),
+    Total_Pagado DECIMAL(10, 2),
+    Saldo_Contable DECIMAL(10, 2),
+    Saldo_Capital DECIMAL(10, 2),
+    Saldo_Total DECIMAL(10, 2),
+    Importe_de_Pago DECIMAL(10, 2),
+    Vencido DECIMAL(10, 2),
+    Vencido_Cliente DECIMAL(10, 2),
+    SdoInsoluto DECIMAL(10, 2),
+    Pago DECIMAL(10, 2),
+    Saldo_Pagare DECIMAL(10, 2),
+    Saldo_Q_Contable DECIMAL(10, 2),
+    Saldo_Q_Capital DECIMAL(10, 2),
+    Recuperación DECIMAL(10, 2),
+    FechaQuebranto DATETIME,
+    Fecha_Ingreso DATETIME,
+    Primer_Pago_Teorico DATETIME,
+    Primer_Pago_Real DATETIME,
+    Ultimo_pago_c_ListaCobro DATETIME,
+    Ultimo_pago_aplicado DATETIME,
+    DiasUltimoPago INT,
+    MontoUltimoPago DECIMAL(10, 2),
+    DiasAtraso INT,
+    Bkt_Actual VARCHAR(50),
+    PeriodosAtraso INT,
+    DiasAtraso_Inicial INT,
+    Bkt_Inicial VARCHAR(50),
+    Sig_Pago DATETIME,
+    Monto_Sig_Pago DECIMAL(10, 2),
+    vCommentExt VARCHAR(255),
+    iPeriodsExt INT,
+    vScoreBuro VARCHAR(50),
+    vCollectStatus VARCHAR(50),
+    Banco VARCHAR(50),
+    Clabe VARCHAR(50),
+    Clabe_Corta VARCHAR(50),
+    Banco_Calculado VARCHAR(50),
+    Estatus_Domi VARCHAR(50),
+    Causa_de_No_Pago VARCHAR(100),
+    Causa_No_Domiciliación VARCHAR(100),
+    Historia_Gestiones TEXT,
+    Historia_Llamadas TEXT,
+    Historia_Visitas TEXT,
+    Historia_Gestiones_Externos TEXT,
+    Historia_RPC TEXT,
+    Historia_PTP TEXT,
+    Historia_PTP_Cumplida TEXT,
+    Historia_PTP_Parcial TEXT,
+    Historia_PTP_Rota TEXT,
+    Gestiones INT,
+    Llamadas INT,
+    Visitas INT,
+    Gestiones_Externos INT,
+    RPC INT,
+    PTP INT,
+    PTP_Cumplida INT,
+    PTP_Parcial_Vigente INT,
+    PTP_Parcial_Vencida INT,
+    PTP_Vigente INT,
+    PTP_Rota INT,
+    Telefono_1 VARCHAR(20),
+    Telefono_2 VARCHAR(20),
+    Domicilio VARCHAR(255),
+    Entre_Calles VARCHAR(255),
+    Colonia VARCHAR(100),
+    Ciudad_Demograficos VARCHAR(100),
+    Estado_Demograficos VARCHAR(50),
+    Codigo_Postal VARCHAR(10),
+    Bandera_PP_Juicio VARCHAR(50),
+    Referencia VARCHAR(100),
+    Tipo_de_Credito VARCHAR(50),
+	FechaGenerado DATETIME
+);

@@ -1567,6 +1567,22 @@
           }
         }
       },
+      "SharpCompress/0.38.0": {
+        "type": "package",
+        "dependencies": {
+          "ZstdSharp.Port": "0.8.1"
+        },
+        "compile": {
+          "lib/net8.0/SharpCompress.dll": {
+            "related": ".pdb"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/SharpCompress.dll": {
+            "related": ".pdb"
+          }
+        }
+      },
       "System.Buffers/4.5.1": {
         "type": "package",
         "compile": {
@@ -2300,7 +2316,7 @@
           }
         }
       },
-      "ZstdSharp.Port/0.8.0": {
+      "ZstdSharp.Port/0.8.1": {
         "type": "package",
         "compile": {
           "lib/net8.0/ZstdSharp.dll": {}
@@ -4707,6 +4723,28 @@
         "serilog.sinks.file.nuspec"
       ]
     },
+    "SharpCompress/0.38.0": {
+      "sha512": "8i6KqjAFI3mvya8W8rnQrf5h4vz6ilw4zqk2AzInVqqqZ25TD6fmVeYBnlisjTWwP26eltZc0buSmJ8a3YIGxg==",
+      "type": "package",
+      "path": "sharpcompress/0.38.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README.md",
+        "lib/net462/SharpCompress.dll",
+        "lib/net462/SharpCompress.pdb",
+        "lib/net6.0/SharpCompress.dll",
+        "lib/net6.0/SharpCompress.pdb",
+        "lib/net8.0/SharpCompress.dll",
+        "lib/net8.0/SharpCompress.pdb",
+        "lib/netstandard2.0/SharpCompress.dll",
+        "lib/netstandard2.0/SharpCompress.pdb",
+        "lib/netstandard2.1/SharpCompress.dll",
+        "lib/netstandard2.1/SharpCompress.pdb",
+        "sharpcompress.0.38.0.nupkg.sha512",
+        "sharpcompress.nuspec"
+      ]
+    },
     "System.Buffers/4.5.1": {
       "sha512": "Rw7ijyl1qqRS0YQD/WycNst8hUUMgrMH4FCn1nNm27M4VxchZ1js3fVjQaANHO5f3sN4isvP4a+Met9Y4YomAg==",
       "type": "package",
@@ -6441,10 +6479,10 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "ZstdSharp.Port/0.8.0": {
-      "sha512": "Z62eNBIu8E8YtbqlMy57tK3dV1+m2b9NhPeaYovB5exmLKvrGCqOhJTzrEUH5VyUWU6vwX3c1XHJGhW5HVs8dA==",
+    "ZstdSharp.Port/0.8.1": {
+      "sha512": "19tNz33kn2EkyViFXuxfVn338UJaRmkwBphVqP2dVJIYQUQgFrgG5h061mxkRRg1Ax6r+6WOj1FxaFZ5qaWqqg==",
       "type": "package",
-      "path": "zstdsharp.port/0.8.0",
+      "path": "zstdsharp.port/0.8.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -6456,7 +6494,7 @@
         "lib/netcoreapp3.1/ZstdSharp.dll",
         "lib/netstandard2.0/ZstdSharp.dll",
         "lib/netstandard2.1/ZstdSharp.dll",
-        "zstdsharp.port.0.8.0.nupkg.sha512",
+        "zstdsharp.port.0.8.1.nupkg.sha512",
         "zstdsharp.port.nuspec"
       ]
     }
@@ -6474,7 +6512,8 @@
       "NLog >= 5.3.4",
       "Pomelo.EntityFrameworkCore.MySql >= 8.0.2",
       "Serilog.AspNetCore >= 8.0.3",
-      "Serilog.Sinks.File >= 6.0.0"
+      "Serilog.Sinks.File >= 6.0.0",
+      "SharpCompress >= 0.38.0"
     ]
   },
   "packageFolders": {
@@ -6570,6 +6609,10 @@
           "Serilog.Sinks.File": {
             "target": "Package",
             "version": "[6.0.0, )"
+          },
+          "SharpCompress": {
+            "target": "Package",
+            "version": "[0.38.0, )"
           }
         },
         "imports": [
