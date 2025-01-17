@@ -9,6 +9,7 @@ using MailKit.Security;
 using SharpCompress.Archives;
 using SharpCompress.Common;
 using System.Data;
+using Org.BouncyCastle.Asn1.Misc;
 
 
 public class LoadDataController : Controller
@@ -45,11 +46,11 @@ public class LoadDataController : Controller
             "D7_Juicios",
             "D8_Sistema",
             "D9_Gestores_Area",
-            "9-FormulateDependencia",
-            "10-TipoFinanciamiento",
-            "11-Motivo",
-            "12-CatalogoBancos",
-            "14-CatalogoResultadosAvance",
+            "C1_Dependencias",
+            "C2_Financiamientos",
+            "C3_Motios",
+            "C4_Bancos",
+            "C6_Resultados_Avance",
             "15-LoadDemograficos"
         };
         return View(activities);
@@ -62,87 +63,125 @@ public class LoadDataController : Controller
         {
             switch (activityName.ToLower())
             {
+                // D# Controllers
                 case "d1_saldos_cartera":
-                    var saldosCarteraController = new D1_Saldos_Cartera_Controller((ILogger<D1_Saldos_Cartera_Controller>)_logger, _configuration);
+                    var saldosCarteraController = new D1_Saldos_Cartera_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D1_Saldos_Cartera_Controller>>(),
+                        _configuration);
                     await saldosCarteraController.D1_ProcessSaldosCartera();
                     break;
 
                 case "d2-saldos_contables":
-                     var saldosContablesController = new D2_Saldos_Contables_Controller((ILogger<D2_Saldos_Contables_Controller>)_logger, _configuration);
+                var saldosContablesController = new D2_Saldos_Contables_Controller(
+                    HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
+                    _configuration);
                     await saldosContablesController.D2_ProcessSaldosContables();
-                break;
+                    break;
 
                 case "d3_aplicacion_pagos":
-                    var aplicaciones_Pagos_Controller = new D3_Aplicaciones_Pagos_Controller((ILogger<D3_Aplicaciones_Pagos_Controller>)_logger, _configuration);
-                    await aplicaciones_Pagos_Controller.D3_ProcessAplicacionPagos();
+                    var aplicacionesPagosController = new D3_Aplicaciones_Pagos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D3_Aplicaciones_Pagos_Controller>>(),
+                        _configuration);
+                    await aplicacionesPagosController.D3_ProcessAplicacionPagos();
                     break;
 
                 case "d4_otorgamiento_creditos":
-                    var otorgamientoCreditosController = new D4_Otorgamiento_Creditos_Controller((ILogger<D4_Otorgamiento_Creditos_Controller>)_logger, _configuration);
+                    var otorgamientoCreditosController = new D4_Otorgamiento_Creditos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D4_Otorgamiento_Creditos_Controller>>(),
+                        _configuration);
                     await otorgamientoCreditosController.D4_ProcessOtorgamientoCreditos();
                     break;
 
                 case "d5_gestiones":
-                    var gestionesController = new D5_Gestiones_Controller((ILogger<D5_Gestiones_Controller>)_logger, _configuration);
+                    var gestionesController = new D5_Gestiones_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D5_Gestiones_Controller>>(),
+                        _configuration);
                     await gestionesController.D5_ProcessGestiones();
-                    break;    
-                    
+                    break;
+
                 case "d6_quebrantos":
-                    var quebrantosController = new D6_Quebrantos_Controller((ILogger<D6_Quebrantos_Controller>)_logger, _configuration);
+                    var quebrantosController = new D6_Quebrantos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
+                        _configuration);
                     await quebrantosController.D6_ProcessQuebrantos();
-                    break;  
+                    break;
 
                 case "d7_juicios":
-                    var juicioController = new D7_Juicios_Controller((ILogger<D7_Juicios_Controller>)_logger, _configuration);
-                    await juicioController.D7_ProcessJuicios();
-                    break; 
+                    var juiciosController = new D7_Juicios_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D7_Juicios_Controller>>(),
+                        _configuration);
+                    await juiciosController.D7_ProcessJuicios();
+                    break;
 
                 case "d8_sistema":
-                    var sistemaController = new D8_Sistema_Controller((ILogger<D8_Sistema_Controller>)_logger, _configuration);
+                    var sistemaController = new D8_Sistema_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D8_Sistema_Controller>>(),
+                        _configuration);
                     await sistemaController.D8_ProcessSistema();
-                    break; 
+                    break;
 
-                case "d7_gestores_area":
-                    var gestoresAreaController = new D9_Gestores_Area_Controller((ILogger<D9_Gestores_Area_Controller>)_logger, _configuration);
+                case "d9_gestores_area":
+                    var gestoresAreaController = new D9_Gestores_Area_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D9_Gestores_Area_Controller>>(),
+                        _configuration);
                     await gestoresAreaController.D9_ProcessGestoresArea();
-                    break;   
-
-                case "9-formulatedependencia":
-                    await Process9FormulateDependencia();
                     break;
 
-                case "10-tipofinanciamiento":
-                    await Process10TipoFinanciamiento();
+                // C# Controllers
+                case "c1_dependencias":
+                    var dependenciasController = new C1_Dependencias_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<C1_Dependencias_Controller>>(),
+                        _configuration);
+                    await dependenciasController.C1_First_Time_Dependencias_Execution();
                     break;
 
-                case "11-motivo":
-                    await Process11Motivo();
+                case "c2_financiamientos":
+                    var financiamientosController = new C2_Financiamientos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<C2_Financiamientos_Controller>>(),
+                        _configuration);
+                    await financiamientosController.C2_First_Time_Financiamiento_Execution();
                     break;
 
-                case "12-catalogobancos":
-                    await Process12CatalogoBancos();
+                case "c3_motivos":
+                    var motivosController = new C3_Motivos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<C3_Motivos_Controller>>(),
+                        _configuration);
+                    await motivosController.C3_First_Time_Motivo_Execution();
                     break;
 
-                case "14-catalogoresultadosavance":
-                    await Process14CatalogoResultadosAvanceAsync();
+                case "c4_bancos":
+                    var bancosController = new C4_Bancos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<C4_Bancos_Controller>>(),
+                        _configuration);
+                    await bancosController.C4_First_Time_Bancos_Execution();
                     break;
 
-                case "15-loaddemograficos":
-                    await Process15LoadDemograficos();
+                case "c5_referencias":
+                    var referenciasController = new C5_Referencias_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<C5_Referencias_Controller>>(),
+                        _configuration);
+                    await referenciasController.C5_ProcessReferencias();
+                    break;
+
+                case "c6_resultados_avances":
+                    var resultadosAvancesController = new C6_Resultados_Avances_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<C6_Resultados_Avances_Controller>>(),
+                        _configuration);
+                    await resultadosAvancesController.C6_First_Time_Resultados_Execution();
                     break;
 
                 default:
                     _logger.LogError($"Unknown activity: {activityName}");
-                    return BadRequest("Unknown activity.");
+                    return BadRequest($"Unknown activity: {activityName}");
             }
 
-            _logger.LogInformation("Activity processed successfully.");
-            return Ok("Activity processed successfully.");
+            _logger.LogInformation($"Activity '{activityName}' processed successfully.");
+            return Ok($"Activity '{activityName}' processed successfully.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing activity.");
-            return StatusCode(500, "Internal server error.");
+            _logger.LogError(ex, $"Error processing activity: {activityName}");
+            return StatusCode(500, $"Internal server error while processing activity: {activityName}");
         }
     }
 
@@ -183,287 +222,6 @@ public class LoadDataController : Controller
         }
         // Write the new log content
         await System.IO.File.WriteAllTextAsync(logPath, logContent);
-    }
-  
-    private async Task Process9FormulateDependencia()
-    {
-        var logBuilder = new StringBuilder();
-        var sqlFilePath = @"C:\Users\Go Credit\Documents\DATA\SQL\FormulateDependencia.sql";
-        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process9FormulateDependencia.");
-        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
-        logBuilder.AppendLine($"SQL Command: {sql}");
-        _logger.LogInformation("Starting Process9FormulateDependencia.");
-        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
-        _logger.LogInformation($"SQL Command: {sql}");
-        using (var connection = new MySqlConnection(_connectionString))
-        {
-            await connection.OpenAsync();
-            using (var transaction = await connection.BeginTransactionAsync())
-            {
-                try
-                {
-                    var command = new MySqlCommand(sql, connection, transaction);
-                    var affectedRows = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
-                    _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
-                    if (affectedRows >= 1)
-                    {
-                        _ = SendEmailAlert("New dependencies have been added");
-                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
-                        _logger.LogInformation("Email alert sent.");
-                    }
-                    else
-                    {
-                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new dependencies added. No email sent.");
-                        _logger.LogInformation("No new dependencies added. No email sent.");
-                    }
-                    await transaction.CommitAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
-                    _logger.LogInformation("Transaction committed.");
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
-                    _logger.LogError(ex, "Error executing SQL file.");
-                    throw;
-                }
-            }
-        }
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process9FormulateDependencia completed.");
-        _logger.LogInformation("Process9FormulateDependencia completed.");
-        await WriteLog(logBuilder.ToString(), @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadFormulateDependencia.log");
-    }
-    
-    private async Task Process10TipoFinanciamiento()
-    {
-        var logBuilder = new StringBuilder();
-        var sqlFilePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\SQL\\FormulateFinanciamiento.sql";
-        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process10TipoFinanciamiento.");
-        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
-        logBuilder.AppendLine($"SQL Command: {sql}");
-        _logger.LogInformation("Starting Process10TipoFinanciamiento.");
-        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
-        _logger.LogInformation($"SQL Command: {sql}");
-                
-        using (var connection = new MySqlConnection(_connectionString))
-        {
-            await connection.OpenAsync();
-            using (var transaction = await connection.BeginTransactionAsync())
-            {
-                try
-                {
-                var command = new MySqlCommand(sql, connection, transaction);
-                var affectedRows = await command.ExecuteNonQueryAsync();
-                logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
-                _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
-
-                if (affectedRows >= 1)
-                {
-                    _ = SendEmailAlert("New tipo_Financiamiento records have been added");
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
-                    _logger.LogInformation("Email alert sent.");
-                }
-                else
-                {
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new tipo_Financiamiento records added. No email sent.");
-                    _logger.LogInformation("No new tipo_Financiamiento records added. No email sent.");
-                }
-
-                await transaction.CommitAsync();
-                logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
-                _logger.LogInformation("Transaction committed.");
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
-                    _logger.LogError(ex, "Error executing SQL file.");
-                    throw;
-                }
-            }
-        }
-    }
-
-    private async Task Process11Motivo()
-    {
-        var logBuilder = new StringBuilder();
-        var sqlFilePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\SQL\\FormulateMotivo.sql";
-        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process11Motivo.");
-        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
-        logBuilder.AppendLine($"SQL Command: {sql}");
-        _logger.LogInformation("Starting Process11Motivo.");
-        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
-        _logger.LogInformation($"SQL Command: {sql}");
-        
-        using (var connection = new MySqlConnection(_connectionString))
-        {
-            await connection.OpenAsync();
-            using (var transaction = await connection.BeginTransactionAsync())
-            {
-                try
-                {
-                    var command = new MySqlCommand(sql, connection, transaction);
-                    var affectedRows = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
-                    _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
-                    
-                    if (affectedRows >= 1)
-                    {
-                        _ = SendEmailAlert("New motivo records have been added");
-                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
-                        _logger.LogInformation("Email alert sent.");
-                    }
-                    else
-                    {
-                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new motivo records added. No email sent.");
-                        _logger.LogInformation("No new motivo records added. No email sent.");
-                    }
-                    
-                    await transaction.CommitAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
-                    _logger.LogInformation("Transaction committed.");
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
-                    _logger.LogError(ex, "Error executing SQL file.");
-                    throw;
-                }
-            }
-        }
-        
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process11Motivo completed.");
-        _logger.LogInformation("Process11Motivo completed.");
-        await WriteLog(logBuilder.ToString(), @"C:\\Users\\Go Credit\\Documents\\DATA\\LOGS\\BulkLoadMotivo.log");
-    }
-
-    private async Task Process12CatalogoBancos()
-    {
-        var logBuilder = new StringBuilder();
-        var sqlFilePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\SQL\\FormulateCatalogoBancos.sql";
-        var sql = await System.IO.File.ReadAllTextAsync(sqlFilePath);
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting Process12Clabe.");
-        logBuilder.AppendLine($"SQL File Path: {sqlFilePath}");
-        logBuilder.AppendLine($"SQL Command: {sql}");
-        _logger.LogInformation("Starting Process12Clabe.");
-        _logger.LogInformation($"SQL File Path: {sqlFilePath}");
-        _logger.LogInformation($"SQL Command: {sql}");
-        
-        using (var connection = new MySqlConnection(_connectionString))
-        {
-            await connection.OpenAsync();
-            using (var transaction = await connection.BeginTransactionAsync())
-            {
-                try
-                {
-                    var command = new MySqlCommand(sql, connection, transaction);
-                    var affectedRows = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - SQL file executed. Rows affected: {affectedRows}.");
-                    _logger.LogInformation($"SQL file executed. Rows affected: {affectedRows}.");
-                    
-                    if (affectedRows >= 1)
-                    {
-                        _ = SendEmailAlert("New clabe records have been added");
-                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Email alert sent.");
-                        _logger.LogInformation("Email alert sent.");
-                    }
-                    else
-                    {
-                        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - No new clabe records added. No email sent.");
-                        _logger.LogInformation("No new clabe records added. No email sent.");
-                    }
-                    
-                    await transaction.CommitAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Transaction committed.");
-                    _logger.LogInformation("Transaction committed.");
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Error executing SQL file: {ex.Message}");
-                    _logger.LogError(ex, "Error executing SQL file.");
-                    throw;
-                }
-            }
-        }
-        
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process12Clabe completed.");
-        _logger.LogInformation("Process12Clabe completed.");
-        await WriteLog(logBuilder.ToString(), @"C:\\Users\\Go Credit\\Documents\\DATA\\LOGS\\BulkLoadClabe.log");
-    }
-
-    private async Task Process14CatalogoResultadosAvanceAsync()
-    {
-        try
-        {
-            // Log the start of the process
-            _logger.LogInformation("Starting Process14CatalogoResultadosAvance...");
-
-            // Define the file path for the input data
-            string inputFilePath = Path.Combine(_filePath, "gestiones.csv"); // Adjust the file name as necessary
-            var resultados = new List<string>();
-
-            // Step 1: Read the CSV file and extract Resultado values
-            using (var reader = new StreamReader(inputFilePath))
-            {
-                string headerLine = await reader.ReadLineAsync(); // Read the header line
-                int resultadoIndex = Array.IndexOf(headerLine.Split(','), "Resultado"); // Find the index of Resultado column
-
-                if (resultadoIndex == -1)
-                {
-                    _logger.LogError("Resultado column not found in the CSV file.");
-                    return;
-                }
-
-                while (!reader.EndOfStream)
-                {
-                    var line = await reader.ReadLineAsync();
-                    var values = line.Split(',');
-
-                    // Ensure the Resultado column exists in the current line
-                    if (values.Length > resultadoIndex)
-                    {
-                        string resultado = values[resultadoIndex].Trim();
-                        if (!string.IsNullOrEmpty(resultado) && !resultados.Contains(resultado))
-                        {
-                            resultados.Add(resultado); // Add distinct Resultado values
-                        }
-                    }
-                }
-            }
-
-            // Step 2: Insert distinct Resultado values into catalogoresultadosavance
-            string connectionString = _configuration.GetConnectionString("DefaultConnection");
-            using (var connection = new MySqlConnection(connectionString))
-            {
-                await connection.OpenAsync();
-
-                string insertQuery = "INSERT INTO catalogoresultadosavance (Clave) VALUES (@Clave)";
-                using (var insertCommand = new MySqlCommand(insertQuery, connection))
-                {
-                    insertCommand.Parameters.Add("@Clave", MySqlDbType.VarChar);
-
-                    foreach (var resultado in resultados)
-                    {
-                        insertCommand.Parameters["@Clave"].Value = resultado;
-                        await insertCommand.ExecuteNonQueryAsync();
-                    }
-                }
-            }
-
-            // Log the successful completion of the process
-            _logger.LogInformation("Process14CatalogoResultadosAvance completed successfully.");
-        }
-        catch (Exception ex)
-        {
-            // Log any errors that occur during the process
-            _logger.LogError($"An error occurred in Process14CatalogoResultadosAvance: {ex.Message}");
-        }
     }
     
     public async Task<IActionResult> Process15LoadDemograficos()
@@ -597,29 +355,6 @@ public class LoadDataController : Controller
                     throw;
                 }
             }
-        }
-    }
-   
-    private async Task SendEmailAlert(string message)
-    {
-        var emailMessage = new MimeMessage();
-        emailMessage.From.Add(new MailboxAddress("Your Name", "gomvc.notice@gmail.com"));
-        emailMessage.To.Add(new MailboxAddress("Alfredo Bueno", "alfredo.bueno@gocredit.mx"));
-        emailMessage.Subject = "Alert: New Dependencies Added";
-        emailMessage.Body = new TextPart("plain")
-        {
-            Text = message
-        };
-
-        using (var client = new MailKit.Net.Smtp.SmtpClient())
-        {
-            await client.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls);
-
-            // Use the app password here
-            await client.AuthenticateAsync("gomvc.notice@gmail.com", "rnbn ugwd jwgu znav");
-
-            await client.SendAsync(emailMessage);
-            await client.DisconnectAsync(true);
         }
     }
     

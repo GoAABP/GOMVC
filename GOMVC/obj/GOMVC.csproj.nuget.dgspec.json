@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj": {}
+    "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj": {
+    "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj",
+        "projectUniqueName": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
         "projectName": "GOMVC",
-        "projectPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj",
+        "projectPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
         "packagesPath": "C:\\Users\\Go Credit\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\obj\\",
+        "outputPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Go Credit\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -6,7 +6,6 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using System.Text.RegularExpressions;
 
 public class D3_Aplicaciones_Pagos_Controller : Controller
 {
@@ -20,12 +19,12 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
     {
         _logger = logger;
         _configuration = configuration;
+#pragma warning disable CS8601 // Possible null reference assignment.
         _connectionString = _configuration.GetConnectionString("DefaultConnection");
+#pragma warning restore CS8601 // Possible null reference assignment.
     }
 
-    // D3_ProcessAplicacionPagos: Process the AplicacionPagos activity
-    [HttpPost("D3_ProcessAplicacionPagos")]
-    public async Task<IActionResult> D3_ProcessAplicacionPagos()
+    public async Task D3_ProcessAplicacionPagos()
     {
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadAplicacionPagos.log";
         var logBuilder = new StringBuilder();
@@ -33,83 +32,72 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         logBuilder.AppendLine(startLog);
         _logger.LogInformation(startLog);
 
-        var files = Directory.GetFiles(_filePath, "Aplicacion de pagos por fecha de Aplica.csv");
+        var files = Directory.GetFiles(_filePath, "Aplicacion de pagos por fecha de Aplica*.csv");
         if (files.Length == 0)
         {
             var errorLog = "File not found.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
-            await D3_WriteLog(logBuilder.ToString(), logPath);
+            await WriteLog(logBuilder.ToString(), logPath);
             throw new FileNotFoundException(errorLog);
         }
 
         var file = files[0];
-        logBuilder.AppendLine("File found.");
+        logBuilder.AppendLine($"File found: {file}");
+
         try
         {
-            var textFilePath = await D3_ConvertAplicacionPagosCsvToText(file, logBuilder);
-            await D3_BulkInsertAplicacionPagosData(textFilePath, logBuilder);
-            await D3_ExecuteAplicacionPagosInsertFromStagingTable(logBuilder, logPath); // Insert directly from the staging table
-            D3_MoveFilesToHistoric(file, textFilePath, logBuilder);
+            await D3_LoadDataToStageWithCondition(file, logBuilder);
+            await D3_ExecuteAplicacionPagosInsertFromStagingTable(logBuilder, logPath);
+            MoveFileToHistoric(file, logBuilder);
         }
         catch (Exception ex)
         {
             logBuilder.AppendLine($"Error: {ex.Message}");
             _logger.LogError(ex, "Error during processing.");
-            await D3_WriteLog(logBuilder.ToString(), logPath);
+            await WriteLog(logBuilder.ToString(), logPath);
             throw;
         }
 
         var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
         logBuilder.AppendLine(endLog);
         _logger.LogInformation(endLog);
-        await D3_WriteLog(logBuilder.ToString(), logPath);
-        return Ok("Aplicacion Pagos processed successfully.");
+        await WriteLog(logBuilder.ToString(), logPath);
     }
 
-    // D3_ConvertAplicacionPagosCsvToText: Convert the CSV to text format for Aplicacion Pagos
-    private async Task<string> D3_ConvertAplicacionPagosCsvToText(string csvFilePath, StringBuilder logBuilder)
+    private void MoveFileToHistoric(string filePath, StringBuilder logBuilder)
     {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
-        var sb = new StringBuilder();
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        var fileExtension = Path.GetExtension(filePath);
+        var newFileName = $"{fileName}_{timestamp}{fileExtension}";
+        var historicFilePath = Path.Combine(_historicFilePath, newFileName);
 
-        try
-        {
-            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
-            {
-                string line;
-                while ((line = await reader.ReadLineAsync()) != null)
-                {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    // Replace line breaks and adjust date formats
-                    var processedLine = line.Normalize(NormalizationForm.FormC);
-                    processedLine = Regex.Replace(processedLine, ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", "\n");
-                    processedLine = Regex.Replace(processedLine, @"(\d{2})/(\d{2})/(\d{4})", "$3-$2-$1"); // Convert MM/DD/YYYY to YYYY-MM-DD
-
-                    sb.AppendLine(processedLine);
-                }
-            }
-
-            await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
-            var logMessage = $"Converted CSV to text for Aplicacion Pagos: {textFilePath}";
-            logBuilder.AppendLine(logMessage);
-            _logger.LogInformation(logMessage);
-        }
-        catch (Exception ex)
-        {
-            var errorLog = $"Error during conversion: {ex.Message}";
-            logBuilder.AppendLine(errorLog);
-            _logger.LogError(ex, errorLog);
-            throw;
-        }
-
-        return textFilePath;
+        System.IO.File.Move(filePath, historicFilePath);
+        logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
+        _logger.LogInformation($"Moved file to historic: {historicFilePath}");
     }
 
-    // D3_BulkInsertAplicacionPagosData: Perform bulk insert of Aplicacion Pagos data
-    private async Task D3_BulkInsertAplicacionPagosData(string textFilePath, StringBuilder logBuilder)
+    private async Task WriteLog(string logContent, string logPath)
+    {
+        var historicLogPath = Path.Combine(_historicFilePath, $"BulkLoad_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+        
+        // Ensure unique log file name
+        if (System.IO.File.Exists(logPath))
+        {
+#pragma warning disable CS8604 // Possible null reference argument.
+            var uniqueLogPath = Path.Combine(
+                Path.GetDirectoryName(logPath),
+                $"{Path.GetFileNameWithoutExtension(logPath)}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}{Path.GetExtension(logPath)}"
+            );
+#pragma warning restore CS8604 // Possible null reference argument.
+            System.IO.File.Move(logPath, uniqueLogPath);
+        }
+
+        await System.IO.File.WriteAllTextAsync(logPath, logContent);
+    }
+
+    private async Task D3_LoadDataToStageWithCondition(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -118,39 +106,84 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 try
                 {
-                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE Stage_Aplicacion_Pagos;", connection, transaction);
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D3_Stage_Aplicacion_Pagos;", connection, transaction);
                     await truncateCommand.ExecuteNonQueryAsync();
-                    var logMessage = "Truncated table Stage_Aplicacion_Pagos.";
-                    logBuilder.AppendLine(logMessage);
-                    _logger.LogInformation(logMessage);
+                    logBuilder.AppendLine("Truncated table D3_Stage_Aplicacion_Pagos.");
+                    _logger.LogInformation("Truncated table D3_Stage_Aplicacion_Pagos.");
 
-                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' " +
-                                          "INTO TABLE Stage_Aplicacion_Pagos " +
-                                          "FIELDS TERMINATED BY '|' " +
-                                          "ENCLOSED BY '\"' " +
-                                          "LINES TERMINATED BY '\\n' " +
-                                          "IGNORE 1 LINES;";
-                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
-                    await loadCommand.ExecuteNonQueryAsync();
-                    logMessage = "Bulk inserted data into Stage_Aplicacion_Pagos.";
-                    logBuilder.AppendLine(logMessage);
-                    _logger.LogInformation(logMessage);
+                    using (var reader = new StreamReader(csvFilePath))
+                    {
+                        string line;
+                        bool stopInserting = false;
+
+                        if (!reader.EndOfStream) await reader.ReadLineAsync();
+
+                        while (!reader.EndOfStream && !stopInserting)
+                        {
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+                            line = await reader.ReadLineAsync();
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+                            var values = line.Split(',');
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
+
+                            if (values.Length > 0 && values[0].Trim() == "0")
+                            {
+                                logBuilder.AppendLine("Encountered row with '0' in the first column. Stopping further insertion.");
+                                _logger.LogInformation("Encountered row with '0' in the first column. Stopping further insertion.");
+                                stopInserting = true;
+                                continue;
+                            }
+
+                            var insertCommandText = $@"
+                                INSERT INTO D3_Stage_Aplicacion_Pagos (
+                                    Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento, 
+                                    Origen_de_Movimiento, Fecha_Pago, Fecha_Aplicacion
+                                ) VALUES (
+                                    @Value1, @Value2, @Value3, @Value4, @Value5, @Value6, @Value7, @Value8, @Value9, @Value10
+                                );";
+
+                            var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
+
+                            for (int i = 0; i < values.Length; i++)
+                            {
+                                string cleanValue = values[i].Trim().Trim('"');
+                                if (i == 0 || i == 1 || i == 4)
+                                {
+                                    if (int.TryParse(cleanValue, out int intValue))
+                                    {
+                                        insertCommand.Parameters.AddWithValue($"@Value{i + 1}", intValue);
+                                    }
+                                    else
+                                    {
+                                        insertCommand.Parameters.AddWithValue($"@Value{i + 1}", DBNull.Value);
+                                    }
+                                }
+                                else
+                                {
+                                    insertCommand.Parameters.AddWithValue($"@Value{i + 1}", cleanValue);
+                                }
+                            }
+
+                            await insertCommand.ExecuteNonQueryAsync();
+                        }
+                    }
 
                     await transaction.CommitAsync();
+                    logBuilder.AppendLine("Data loaded into D3_Stage_Aplicacion_Pagos with condition applied.");
+                    _logger.LogInformation("Data loaded into D3_Stage_Aplicacion_Pagos with condition applied.");
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    var errorLog = $"Error during bulk insert for Aplicacion Pagos: {ex.Message}";
-                    logBuilder.AppendLine(errorLog);
-                    _logger.LogError(ex, errorLog);
+                    logBuilder.AppendLine($"Error loading data into stage table: {ex.Message}");
+                    _logger.LogError(ex, "Error loading data into stage table.");
                     throw;
                 }
             }
         }
     }
 
-    // D3_ExecuteAplicacionPagosInsertFromStagingTable: Directly insert from the staging table into the final table
     private async Task D3_ExecuteAplicacionPagosInsertFromStagingTable(StringBuilder logBuilder, string logPath)
     {
         using (var connection = new MySqlConnection(_connectionString))
@@ -170,65 +203,28 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                         )
                         SELECT 
                             Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento, Origen_de_Movimiento,
-                            STR_TO_DATE(Fecha_Pago, '%Y-%m-%d'), STR_TO_DATE(Fecha_Aplicacion, '%Y-%m-%d'), STR_TO_DATE(Fecha_Deposito, '%Y-%m-%d'),
+                            STR_TO_DATE(Fecha_Pago, '%d/%m/%Y'), STR_TO_DATE(Fecha_Aplicacion, '%d/%m/%Y'), STR_TO_DATE(Fecha_Deposito, '%d/%m/%Y'),
                             Status, Pago, Capital, Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, Moratorios, IVA_Mora,
                             Pago_Tardio, IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon,
                             IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
-                        FROM Stage_Aplicacion_Pagos;";
+                        FROM D3_Stage_Aplicacion_Pagos;";
 
                     var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
                     await insertCommand.ExecuteNonQueryAsync();
-                    var logMessage = "Inserted data from Stage_Aplicacion_Pagos into D3_Aplicacion_Pagos.";
-                    logBuilder.AppendLine(logMessage);
-                    _logger.LogInformation(logMessage);
+                    logBuilder.AppendLine("Inserted data from D3_Stage_Aplicacion_Pagos into D3_Aplicacion_Pagos.");
+                    _logger.LogInformation("Inserted data from D3_Stage_Aplicacion_Pagos into D3_Aplicacion_Pagos.");
 
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    var errorLog = $"Error during insert for Aplicacion Pagos from staging to final table: {ex.Message}";
-                    logBuilder.AppendLine(errorLog);
-                    _logger.LogError(ex, errorLog);
-                    await D3_WriteLog(logBuilder.ToString(), logPath);
+                    logBuilder.AppendLine($"Error during insert for Aplicacion Pagos from staging to final table: {ex.Message}");
+                    _logger.LogError(ex, "Error during insert for Aplicacion Pagos from staging to final table.");
+                    await WriteLog(logBuilder.ToString(), logPath);
                     throw;
                 }
             }
         }
-    }
-
-    // D3_MoveFilesToHistoric: Move files to the historic folder after processing
-    private void D3_MoveFilesToHistoric(string originalFilePath, string textFilePath, StringBuilder logBuilder)
-    {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-
-        // Move original file
-        var originalFileName = Path.GetFileNameWithoutExtension(originalFilePath);
-        var originalExtension = Path.GetExtension(originalFilePath);
-        var newOriginalFileName = $"{originalFileName}_{timestamp}{originalExtension}";
-        var newOriginalFilePath = Path.Combine(_historicFilePath, newOriginalFileName);
-
-        System.IO.File.Move(originalFilePath, newOriginalFilePath);
-        var logMessage = $"Moved original file to historic folder: {newOriginalFilePath}";
-        logBuilder.AppendLine(logMessage);
-        _logger.LogInformation(logMessage);
-
-        // Move converted file
-        var textFileName = Path.GetFileNameWithoutExtension(textFilePath);
-        var textExtension = Path.GetExtension(textFilePath);
-        var newTextFileName = $"{textFileName}_{timestamp}{textExtension}";
-        var newTextFilePath = Path.Combine(_historicFilePath, newTextFileName);
-
-        System.IO.File.Move(textFilePath, newTextFilePath);
-        logMessage = $"Moved converted file to historic folder: {newTextFilePath}";
-        logBuilder.AppendLine(logMessage);
-        _logger.LogInformation(logMessage);
-    }
-
-    // D3_WriteLog: Write logs to a log file after processing
-    private async Task D3_WriteLog(string logContent, string logPath)
-    {
-        var historicLogPath = Path.Combine(_historicFilePath, $"BulkLoad_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
-        await System.IO.File.WriteAllTextAsync(historicLogPath, logContent, Encoding.UTF8);
     }
 }

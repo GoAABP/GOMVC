@@ -20,7 +20,9 @@ public class D5_Gestiones_Controller : Controller
     {
         _logger = logger;
         _configuration = configuration;
+#pragma warning disable CS8601 // Possible null reference assignment.
         _connectionString = _configuration.GetConnectionString("DefaultConnection");
+#pragma warning restore CS8601 // Possible null reference assignment.
     }
 
     public async Task D5_ProcessGestiones()

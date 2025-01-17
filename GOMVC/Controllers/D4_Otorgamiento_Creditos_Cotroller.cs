@@ -16,11 +16,15 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
     private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public D4_Otorgamiento_Creditos_Controller(ILogger<D4_Otorgamiento_Creditos_Controller> logger, IConfiguration configuration)
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     {
         _logger = logger;
         _configuration = configuration;
+#pragma warning disable CS8601 // Possible null reference assignment.
         _connectionString = _configuration.GetConnectionString("DefaultConnection");
+#pragma warning restore CS8601 // Possible null reference assignment.
     }
 
     // D4_ProcessOtorgamientoCreditos: Main entry point for processing
@@ -80,6 +84,7 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
             using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
             {
                 string line;
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
                     if (string.IsNullOrWhiteSpace(line)) continue;
@@ -100,6 +105,7 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
 
                     sb.AppendLine(processedLine);
                 }
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
             }
 
             using (var writer = new StreamWriter(textFilePath, false, Encoding.UTF8))
