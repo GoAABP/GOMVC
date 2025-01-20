@@ -96,7 +96,7 @@ public class LoadDataController : Controller
                     var gestionesController = new D5_Gestiones_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D5_Gestiones_Controller>>(),
                         _configuration);
-                    await gestionesController.D5_ProcessGestiones();
+                    await gestionesController.D5_ProcessFile();
                     break;
 
                 case "d6_quebrantos":

@@ -9,9 +9,14 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\GOMVC.pdb
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Azure.Core.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Azure.Identity.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\BouncyCastle.Cryptography.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\ClosedXML.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\ClosedXML.Parser.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\DocumentFormat.OpenXml.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\DocumentFormat.OpenXml.Framework.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\EPPlus.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\EPPlus.Interfaces.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\EPPlus.System.Drawing.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\ExcelNumberFormat.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Google.Protobuf.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Humanizer.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\K4os.Compression.LZ4.dll
@@ -60,6 +65,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\MySql.Data.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\MySqlConnector.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\NLog.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Pomelo.EntityFrameworkCore.MySql.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\RBush.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.AspNetCore.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Extensions.Hosting.dll
@@ -70,6 +76,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Sinks.Console.
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Sinks.Debug.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Sinks.File.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\SharpCompress.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\SixLabors.Fonts.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.CodeDom.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Composition.AttributedModel.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Composition.Convention.dll
@@ -79,6 +86,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Composition.Typ
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Configuration.ConfigurationManager.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Drawing.Common.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.IO.Packaging.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Memory.Data.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Runtime.Caching.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\System.Security.Cryptography.Pkcs.dll
