@@ -19,27 +19,26 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
     {
         _logger = logger;
         _configuration = configuration;
-#pragma warning disable CS8601 // Possible null reference assignment.
-        _connectionString = _configuration.GetConnectionString("DefaultConnection");
-#pragma warning restore CS8601 // Possible null reference assignment.
+        _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
+
+        // Register encoding provider for special character handling
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
-    public async Task D3_ProcessAplicacionPagos()
+    public async Task<IActionResult> D3_ProcessAplicacionPagos()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadAplicacionPagos.log";
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D3_Aplicaciones_Pagos.log";
         var logBuilder = new StringBuilder();
-        var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
-        logBuilder.AppendLine(startLog);
-        _logger.LogInformation(startLog);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
+        _logger.LogInformation("Process started.");
 
         var files = Directory.GetFiles(_filePath, "Aplicacion de pagos por fecha de Aplica*.csv");
         if (files.Length == 0)
         {
-            var errorLog = "File not found.";
-            logBuilder.AppendLine(errorLog);
-            _logger.LogError(errorLog);
+            logBuilder.AppendLine("File not found.");
+            _logger.LogError("File not found.");
             await WriteLog(logBuilder.ToString(), logPath);
-            throw new FileNotFoundException(errorLog);
+            return NotFound("No files found.");
         }
 
         var file = files[0];
@@ -47,54 +46,28 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
 
         try
         {
-            await D3_LoadDataToStageWithCondition(file, logBuilder);
-            await D3_ExecuteAplicacionPagosInsertFromStagingTable(logBuilder, logPath);
-            MoveFileToHistoric(file, logBuilder);
+            // Convert file encoding to UTF-8 with BOM
+            var convertedFilePath = ConvertToUTF8WithBOM(file);
+            logBuilder.AppendLine($"Converted file encoding to UTF-8 with BOM: {convertedFilePath}");
+
+            await D3_LoadDataToStageWithCondition(convertedFilePath, logBuilder);
+            await D3_ExecuteAplicacionPagosInsertFromStagingTable(logBuilder);
+
+            MoveFileToHistoric(file, logBuilder); // Move original file to historic
+            MoveFileToHistoric(convertedFilePath, logBuilder); // Move converted file to historic
         }
         catch (Exception ex)
         {
             logBuilder.AppendLine($"Error: {ex.Message}");
             _logger.LogError(ex, "Error during processing.");
             await WriteLog(logBuilder.ToString(), logPath);
-            throw;
+            return StatusCode(500, "Error during processing.");
         }
 
-        var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
-        logBuilder.AppendLine(endLog);
-        _logger.LogInformation(endLog);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
+        _logger.LogInformation("Process completed successfully.");
         await WriteLog(logBuilder.ToString(), logPath);
-    }
-
-    private void MoveFileToHistoric(string filePath, StringBuilder logBuilder)
-    {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        var fileExtension = Path.GetExtension(filePath);
-        var newFileName = $"{fileName}_{timestamp}{fileExtension}";
-        var historicFilePath = Path.Combine(_historicFilePath, newFileName);
-
-        System.IO.File.Move(filePath, historicFilePath);
-        logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
-        _logger.LogInformation($"Moved file to historic: {historicFilePath}");
-    }
-
-    private async Task WriteLog(string logContent, string logPath)
-    {
-        var historicLogPath = Path.Combine(_historicFilePath, $"BulkLoad_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
-        
-        // Ensure unique log file name
-        if (System.IO.File.Exists(logPath))
-        {
-#pragma warning disable CS8604 // Possible null reference argument.
-            var uniqueLogPath = Path.Combine(
-                Path.GetDirectoryName(logPath),
-                $"{Path.GetFileNameWithoutExtension(logPath)}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}{Path.GetExtension(logPath)}"
-            );
-#pragma warning restore CS8604 // Possible null reference argument.
-            System.IO.File.Move(logPath, uniqueLogPath);
-        }
-
-        await System.IO.File.WriteAllTextAsync(logPath, logContent);
+        return Ok("File processed successfully.");
     }
 
     private async Task D3_LoadDataToStageWithCondition(string csvFilePath, StringBuilder logBuilder)
@@ -111,81 +84,126 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                     logBuilder.AppendLine("Truncated table D3_Stage_Aplicacion_Pagos.");
                     _logger.LogInformation("Truncated table D3_Stage_Aplicacion_Pagos.");
 
-                    using (var reader = new StreamReader(csvFilePath))
+                    using (var reader = new StreamReader(csvFilePath, Encoding.UTF8))
                     {
                         string line;
-                        bool stopInserting = false;
+                        bool isHeader = true;
 
-                        if (!reader.EndOfStream) await reader.ReadLineAsync();
-
-                        while (!reader.EndOfStream && !stopInserting)
+                        while (!reader.EndOfStream)
                         {
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
                             line = await reader.ReadLineAsync();
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-                            var values = line.Split(',');
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
 
-                            if (values.Length > 0 && values[0].Trim() == "0")
+                            // Skip header row
+                            if (isHeader)
                             {
-                                logBuilder.AppendLine("Encountered row with '0' in the first column. Stopping further insertion.");
-                                _logger.LogInformation("Encountered row with '0' in the first column. Stopping further insertion.");
-                                stopInserting = true;
+                                isHeader = false;
                                 continue;
                             }
 
-                            var insertCommandText = $@"
-                                INSERT INTO D3_Stage_Aplicacion_Pagos (
-                                    Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento, 
-                                    Origen_de_Movimiento, Fecha_Pago, Fecha_Aplicacion
-                                ) VALUES (
-                                    @Value1, @Value2, @Value3, @Value4, @Value5, @Value6, @Value7, @Value8, @Value9, @Value10
-                                );";
+                            var values = line.Split(',');
 
-                            var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
-
-                            for (int i = 0; i < values.Length; i++)
+                            // Stop processing if the first column contains "0"
+                            if (values.Length > 0 && values[0].Trim() == "0")
                             {
-                                string cleanValue = values[i].Trim().Trim('"');
-                                if (i == 0 || i == 1 || i == 4)
-                                {
-                                    if (int.TryParse(cleanValue, out int intValue))
-                                    {
-                                        insertCommand.Parameters.AddWithValue($"@Value{i + 1}", intValue);
-                                    }
-                                    else
-                                    {
-                                        insertCommand.Parameters.AddWithValue($"@Value{i + 1}", DBNull.Value);
-                                    }
-                                }
-                                else
-                                {
-                                    insertCommand.Parameters.AddWithValue($"@Value{i + 1}", cleanValue);
-                                }
+                                logBuilder.AppendLine("Encountered row with '0' in the first column. Stopping further insertion.");
+                                break;
                             }
 
-                            await insertCommand.ExecuteNonQueryAsync();
+                            try
+                            {
+                                var insertCommand = new MySqlCommand(@"
+                                    INSERT INTO D3_Stage_Aplicacion_Pagos (
+                                        Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento,
+                                        Origen_de_Movimiento, Fecha_Pago, Fecha_Aplicacion, Fecha_Deposito, Status, Pago, Capital,
+                                        Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, Moratorios, IVA_Mora, Pago_Tardio,
+                                        IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon,
+                                        IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
+                                    ) VALUES (
+                                        @Id_Credito, @Id_Convenio, @Convenio, @Referencia, @Id_Pago, @Nombre_Cliente, @Financiamiento,
+                                        @Origen_de_Movimiento, @Fecha_Pago, @Fecha_Aplicacion, @Fecha_Deposito, @Status, @Pago, @Capital,
+                                        @Interes, @IVA_Int, @Comision_Financiada, @IVA_Comision_Financ, @Moratorios, @IVA_Mora, @Pago_Tardio,
+                                        @IVA_PagoTardio, @Recuperacion, @IVA_Recup, @Com_Liquidacion, @IVA_Com_Liquidacion, @Retencion_X_Admon,
+                                        @IVA_Retencion_X_Admon, @Pago_Exceso, @Gestor, @Forma_de_pago, @vMotive
+                                    );", connection, transaction);
+
+                                // Map each CSV column to SQL parameters
+                                insertCommand.Parameters.AddWithValue("@Id_Credito", ParseInteger(values[0]));
+                                insertCommand.Parameters.AddWithValue("@Id_Convenio", ParseInteger(values[1]));
+                                insertCommand.Parameters.AddWithValue("@Convenio", ParseString(values[2]));
+                                insertCommand.Parameters.AddWithValue("@Referencia", ParseString(values[3]));
+                                insertCommand.Parameters.AddWithValue("@Id_Pago", ParseInteger(values[4]));
+                                insertCommand.Parameters.AddWithValue("@Nombre_Cliente", ParseString(values[5]));
+                                insertCommand.Parameters.AddWithValue("@Financiamiento", ParseString(values[6]));
+                                insertCommand.Parameters.AddWithValue("@Origen_de_Movimiento", ParseString(values[7]));
+                                insertCommand.Parameters.AddWithValue("@Fecha_Pago", ParseDate(values[8]));
+                                insertCommand.Parameters.AddWithValue("@Fecha_Aplicacion", ParseDate(values[9]));
+                                insertCommand.Parameters.AddWithValue("@Fecha_Deposito", ParseDate(values[10]));
+                                insertCommand.Parameters.AddWithValue("@Status", ParseString(values[11]));
+                                insertCommand.Parameters.AddWithValue("@Pago", ParseDecimal(values[12]));
+                                insertCommand.Parameters.AddWithValue("@Capital", ParseDecimal(values[13]));
+                                insertCommand.Parameters.AddWithValue("@Interes", ParseDecimal(values[14]));
+                                insertCommand.Parameters.AddWithValue("@IVA_Int", ParseDecimal(values[15]));
+                                insertCommand.Parameters.AddWithValue("@Comision_Financiada", ParseDecimal(values[16]));
+                                insertCommand.Parameters.AddWithValue("@IVA_Comision_Financ", ParseDecimal(values[17]));
+                                insertCommand.Parameters.AddWithValue("@Moratorios", ParseDecimal(values[18]));
+                                insertCommand.Parameters.AddWithValue("@IVA_Mora", ParseDecimal(values[19]));
+                                insertCommand.Parameters.AddWithValue("@Pago_Tardio", ParseDecimal(values[20]));
+                                insertCommand.Parameters.AddWithValue("@IVA_PagoTardio", ParseDecimal(values[21]));
+                                insertCommand.Parameters.AddWithValue("@Recuperacion", ParseDecimal(values[22]));
+                                insertCommand.Parameters.AddWithValue("@IVA_Recup", ParseDecimal(values[23]));
+                                insertCommand.Parameters.AddWithValue("@Com_Liquidacion", ParseDecimal(values[24]));
+                                insertCommand.Parameters.AddWithValue("@IVA_Com_Liquidacion", ParseDecimal(values[25]));
+                                insertCommand.Parameters.AddWithValue("@Retencion_X_Admon", ParseDecimal(values[26]));
+                                insertCommand.Parameters.AddWithValue("@IVA_Retencion_X_Admon", ParseDecimal(values[27]));
+                                insertCommand.Parameters.AddWithValue("@Pago_Exceso", ParseDecimal(values[28]));
+                                insertCommand.Parameters.AddWithValue("@Gestor", ParseString(values[29]));
+                                insertCommand.Parameters.AddWithValue("@Forma_de_pago", ParseString(values[30]));
+                                insertCommand.Parameters.AddWithValue("@vMotive", ParseString(values[31]));
+
+                                await insertCommand.ExecuteNonQueryAsync();
+                            }
+                            catch (Exception ex)
+                            {
+                                logBuilder.AppendLine($"Error processing row: {line} - {ex.Message}");
+                                _logger.LogWarning($"Error processing row: {line} - {ex.Message}");
+                            }
                         }
                     }
 
                     await transaction.CommitAsync();
-                    logBuilder.AppendLine("Data loaded into D3_Stage_Aplicacion_Pagos with condition applied.");
-                    _logger.LogInformation("Data loaded into D3_Stage_Aplicacion_Pagos with condition applied.");
+                    logBuilder.AppendLine("Data loaded into D3_Stage_Aplicacion_Pagos.");
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
                     logBuilder.AppendLine($"Error loading data into stage table: {ex.Message}");
-                    _logger.LogError(ex, "Error loading data into stage table.");
                     throw;
                 }
             }
         }
     }
 
-    private async Task D3_ExecuteAplicacionPagosInsertFromStagingTable(StringBuilder logBuilder, string logPath)
+    private async Task D3_ExecuteAplicacionPagosInsertFromStagingTable(StringBuilder logBuilder)
     {
+        var sqlInsertCommand = @"
+            INSERT INTO D3_Aplicacion_Pagos (
+                Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento,
+                Origen_de_Movimiento, Fecha_Pago, Fecha_Aplicacion, Fecha_Deposito, Status, Pago, Capital,
+                Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, Moratorios, IVA_Mora, Pago_Tardio,
+                IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon,
+                IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
+            )
+            SELECT 
+                Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento,
+                Origen_de_Movimiento, Fecha_Pago, Fecha_Aplicacion, Fecha_Deposito, Status, Pago, Capital,
+                Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, Moratorios, IVA_Mora, Pago_Tardio,
+                IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon,
+                IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
+            FROM D3_Stage_Aplicacion_Pagos
+            WHERE NOT EXISTS (
+                SELECT 1 FROM D3_Aplicacion_Pagos WHERE D3_Aplicacion_Pagos.Id_Pago = D3_Stage_Aplicacion_Pagos.Id_Pago
+            );";
+
         using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
@@ -193,38 +211,57 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 try
                 {
-                    var insertCommandText = @"
-                        INSERT INTO D3_Aplicacion_Pagos (
-                            Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento, Origen_de_Movimiento,
-                            Fecha_Pago, Fecha_Aplicacion, Fecha_Deposito, Status, Pago, Capital, Interes, IVA_Int, Comision_Financiada,
-                            IVA_Comision_Financ, Moratorios, IVA_Mora, Pago_Tardio, IVA_PagoTardio, Recuperacion, IVA_Recup,
-                            Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon, IVA_Retencion_X_Admon, Pago_Exceso, Gestor,
-                            Forma_de_pago, vMotive
-                        )
-                        SELECT 
-                            Id_Credito, Id_Convenio, Convenio, Referencia, Id_Pago, Nombre_Cliente, Financiamiento, Origen_de_Movimiento,
-                            STR_TO_DATE(Fecha_Pago, '%d/%m/%Y'), STR_TO_DATE(Fecha_Aplicacion, '%d/%m/%Y'), STR_TO_DATE(Fecha_Deposito, '%d/%m/%Y'),
-                            Status, Pago, Capital, Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, Moratorios, IVA_Mora,
-                            Pago_Tardio, IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon,
-                            IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
-                        FROM D3_Stage_Aplicacion_Pagos;";
-
-                    var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
-                    await insertCommand.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Inserted data from D3_Stage_Aplicacion_Pagos into D3_Aplicacion_Pagos.");
-                    _logger.LogInformation("Inserted data from D3_Stage_Aplicacion_Pagos into D3_Aplicacion_Pagos.");
-
+                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
+                    await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Data inserted into D3_Aplicacion_Pagos.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"Error during insert for Aplicacion Pagos from staging to final table: {ex.Message}");
-                    _logger.LogError(ex, "Error during insert for Aplicacion Pagos from staging to final table.");
-                    await WriteLog(logBuilder.ToString(), logPath);
+                    logBuilder.AppendLine($"Error inserting data: {ex.Message}");
                     throw;
                 }
             }
         }
     }
+
+    private async Task WriteLog(string content, string logPath)
+    {
+        await System.IO.File.WriteAllTextAsync(logPath, content);
+    }
+
+    private void MoveFileToHistoric(string filePath, StringBuilder logBuilder)
+    {
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+        var historicFilePath = Path.Combine(_historicFilePath, $"{Path.GetFileNameWithoutExtension(filePath)}_{timestamp}{Path.GetExtension(filePath)}");
+        System.IO.File.Move(filePath, historicFilePath);
+        logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
+    }
+
+    private string ConvertToUTF8WithBOM(string filePath)
+    {
+        var newFilePath = Path.Combine(
+            Path.GetDirectoryName(filePath)!,
+            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
+        );
+
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var sourceEncoding = Encoding.GetEncoding("Windows-1252");
+        using (var reader = new StreamReader(filePath, sourceEncoding))
+        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true))) // Add BOM
+        {
+            while (!reader.EndOfStream)
+            {
+                writer.WriteLine(reader.ReadLine()?.Replace("\"", "")); // Remove surrounding quotes
+            }
+        }
+
+        return newFilePath;
+    }
+
+    private int? ParseInteger(string value) => int.TryParse(value, out var result) ? result : (int?)null;
+    private decimal? ParseDecimal(string value) => decimal.TryParse(value, out var result) ? result : (decimal?)null;
+    private string? ParseString(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private DateTime? ParseDate(string value) => DateTime.TryParse(value, out var result) ? result : (DateTime?)null;
 }

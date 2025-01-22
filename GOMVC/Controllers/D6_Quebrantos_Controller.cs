@@ -5,6 +5,7 @@ using MySql.Data.MySqlClient;
 using System;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 public class D6_Quebrantos_Controller : Controller
@@ -15,26 +16,21 @@ public class D6_Quebrantos_Controller : Controller
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
     private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
 
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public D6_Quebrantos_Controller(ILogger<D6_Quebrantos_Controller> logger, IConfiguration configuration)
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     {
         _logger = logger;
         _configuration = configuration;
-#pragma warning disable CS8601 // Possible null reference assignment.
-        _connectionString = _configuration.GetConnectionString("DefaultConnection");
-#pragma warning restore CS8601 // Possible null reference assignment.
+        _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
     }
 
     public async Task D6_ProcessQuebrantos()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadQuebrantos.log";
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Quebrantos_Bulk.log";
         var logBuilder = new StringBuilder();
-        var startLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.";
-        logBuilder.AppendLine(startLog);
-        _logger.LogInformation(startLog);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
+        _logger.LogInformation("Process started.");
 
-        var files = Directory.GetFiles(_filePath, "Quebrantos datos Cobranza_*.csv");
+        var files = Directory.GetFiles(_filePath, "Quebrantos_Datos_Cobranza*.csv");
         if (files.Length == 0)
         {
             var errorLog = "File not found.";
@@ -45,13 +41,13 @@ public class D6_Quebrantos_Controller : Controller
         }
 
         var file = files[0];
-        logBuilder.AppendLine("File found.");
+        logBuilder.AppendLine($"File found: {file}");
 
         try
         {
             var textFilePath = await D6_ConvertQuebrantosCsvToText(file, logBuilder);
             await D6_BulkInsertQuebrantos(textFilePath, logBuilder);
-            await D6_ExecuteInsertQuebrantos(logBuilder);
+            await D6_ExecuteQuebrantosInsert(logBuilder, logPath);
             D6_MoveFilesToHistoric(file, textFilePath, logBuilder);
         }
         catch (Exception ex)
@@ -62,48 +58,76 @@ public class D6_Quebrantos_Controller : Controller
             throw;
         }
 
-        var endLog = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.";
-        logBuilder.AppendLine(endLog);
-        _logger.LogInformation(endLog);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
+        _logger.LogInformation("Process completed successfully.");
         await D6_WriteLog(logBuilder.ToString(), logPath);
     }
 
-    private async Task<string> D6_ConvertQuebrantosCsvToText(string csvFilePath, StringBuilder logBuilder)
+    public async Task D6_ProcessHistoricQuebrantos()
     {
-        var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
-        var sb = new StringBuilder();
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Quebrantos_Historic_Bulk.log";
+        var logBuilder = new StringBuilder();
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process started.");
+        _logger.LogInformation("Historic process started.");
 
-        try
+        var files = Directory.GetFiles(_filePath, "Quebrantos_Datos_Cobranza_*.csv");
+        if (files.Length == 0)
         {
-            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
-            {
-                string line;
-#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
-                while ((line = await reader.ReadLineAsync()) != null)
-                {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    var processedLine = line.Normalize(NormalizationForm.FormC);
-                    processedLine = processedLine.Replace(",", "|"); // Replace commas with the delimiter
-                    sb.AppendLine(processedLine);
-                }
-#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
-            }
-
-            await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString(), Encoding.UTF8);
-            var logMessage = $"Converted CSV to text: {textFilePath}";
-            logBuilder.AppendLine(logMessage);
-            _logger.LogInformation(logMessage);
-        }
-        catch (Exception ex)
-        {
-            var errorLog = $"Error during conversion: {ex.Message}";
+            var errorLog = "No historic files found.";
             logBuilder.AppendLine(errorLog);
-            _logger.LogError(ex, errorLog);
-            throw;
+            _logger.LogError(errorLog);
+            await D6_WriteLog(logBuilder.ToString(), logPath);
+            throw new FileNotFoundException(errorLog);
         }
 
-        return textFilePath;
+        foreach (var file in files)
+        {
+            logBuilder.AppendLine($"Processing file: {file}");
+            try
+            {
+                var fileName = Path.GetFileNameWithoutExtension(file);
+                var match = Regex.Match(fileName, @"Quebrantos_Datos_Cobranza_(\d{2})(\d{2})(\d{4})(Morning|Afternoon|Night)");
+
+                if (!match.Success)
+                {
+                    var errorLog = $"Invalid file name format: {fileName}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(errorLog);
+                    continue;
+                }
+
+                var day = int.Parse(match.Groups[1].Value);
+                var month = int.Parse(match.Groups[2].Value);
+                var year = int.Parse(match.Groups[3].Value);
+                var period = match.Groups[4].Value;
+
+                var parsedDate = new DateTime(year, month, day);
+                var defaultTime = period switch
+                {
+                    "Morning" => new TimeSpan(8, 0, 0),
+                    "Afternoon" => new TimeSpan(14, 0, 0),
+                    "Night" => new TimeSpan(20, 0, 0),
+                    _ => throw new InvalidOperationException("Unknown period.")
+                };
+                var fechaGenerado = parsedDate.Add(defaultTime);
+
+                logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
+
+                var textFilePath = await D6_ConvertQuebrantosCsvToText(file, logBuilder);
+                await D6_BulkInsertQuebrantos(textFilePath, logBuilder);
+                await D6_InsertHistoricQuebrantos(fechaGenerado, logBuilder, logPath);
+                D6_MoveFilesToHistoric(file, textFilePath, logBuilder);
+            }
+            catch (Exception ex)
+            {
+                logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
+                _logger.LogError(ex, $"Error processing file {file}.");
+            }
+        }
+
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process completed.");
+        _logger.LogInformation("Historic process completed.");
+        await D6_WriteLog(logBuilder.ToString(), logPath);
     }
 
     private async Task D6_BulkInsertQuebrantos(string textFilePath, StringBuilder logBuilder)
@@ -118,36 +142,49 @@ public class D6_Quebrantos_Controller : Controller
                     var truncateCommand = new MySqlCommand("TRUNCATE TABLE Stage_Quebrantos;", connection, transaction);
                     await truncateCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Truncated table Stage_Quebrantos.");
-                    _logger.LogInformation("Truncated table Stage_Quebrantos.");
 
-                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' " +
-                                          "INTO TABLE Stage_Quebrantos" +
-                                          "FIELDS TERMINATED BY '|' " +
-                                          "ENCLOSED BY '\"' " +
-                                          "LINES TERMINATED BY '\\n' " +
-                                          "IGNORE 1 LINES;";
-                        
+                    var loadCommandText = $@"
+                        LOAD DATA LOCAL INFILE '{textFilePath.Replace("\\", "\\\\")}' 
+                        INTO TABLE Stage_Quebrantos 
+                        FIELDS TERMINATED BY '|' 
+                        LINES TERMINATED BY '\n' 
+                        IGNORE 1 LINES;";
                     var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
                     await loadCommand.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Bulk inserted data into Stage_Quebrantos.");
-                    _logger.LogInformation("Bulk inserted data into Stage_Quebrantos.");
-
+                    logBuilder.AppendLine($"Bulk inserted data into Stage_Quebrantos from {textFilePath}.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    var errorLog = $"Error during bulk insert: {ex.Message}";
-                    logBuilder.AppendLine(errorLog);
-                    _logger.LogError(ex, errorLog);
+                    logBuilder.AppendLine($"Error during bulk insert: {ex.Message}");
                     throw;
                 }
             }
         }
     }
 
-    private async Task D6_ExecuteInsertQuebrantos(StringBuilder logBuilder)
+    private async Task D6_ExecuteQuebrantosInsert(StringBuilder logBuilder, string logPath)
     {
+        var sqlInsertCommand = @"
+            INSERT INTO Quebrantos (
+                Operacion, Referencia, Nombre, Convenio, vFinancingTypeId, KVigente, KVencido, IntVencido,
+                IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, PagosRealizados, SdoPendiente,
+                IntXDevengar, SdoTotalXPagar, FechaQuebranto, UltPagoTeorico, UltimoPago, UltPagoApl,
+                Gestor, nCommission, nCommTax, vMotive, FechaGenerado
+            )
+            SELECT
+                Operacion, Referencia, Nombre, Convenio, vFinancingTypeId, KVigente, KVencido, IntVencido,
+                IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, PagosRealizados, SdoPendiente,
+                IntXDevengar, SdoTotalXPagar,
+                CASE
+                    WHEN FechaQuebranto = '0000-00-00' OR FechaQuebranto = '' THEN NULL
+                    ELSE STR_TO_DATE(FechaQuebranto, '%Y-%m-%d')
+                END AS FechaQuebranto,
+                UltPagoTeorico, UltimoPago, UltPagoApl, Gestor, nCommission, nCommTax, vMotive,
+                NOW() AS FechaGenerado
+            FROM Stage_Quebrantos;";
+
         using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
@@ -155,77 +192,117 @@ public class D6_Quebrantos_Controller : Controller
             {
                 try
                 {
-                    var insertCommandText = @"
-                        INSERT INTO Quebrantos (
-                            Operacion, Referencia, Nombre, Convenio, vFinancingTypeId, KVigente, KVencido, IntVencido,
-                            IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, PagosRealizados, SdoPendiente,
-                            IntXDevengar, SdoTotalXPagar, FechaQuebranto, UltPagoTeorico, UltimoPago, UltPagoApl,
-                            Gestor, nCommission, nCommTax, vMotive, FechaGenerado
-                        )
-                        SELECT
-                            Operacion, Referencia, Nombre, Convenio, vFinancingTypeId, KVigente, KVencido, IntVencido,
-                            IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, PagosRealizados, SdoPendiente,
-                            IntXDevengar, SdoTotalXPagar,
-                            CASE
-                                WHEN FechaQuebranto = '0000-00-00' OR FechaQuebranto = '' THEN NULL
-                                ELSE STR_TO_DATE(FechaQuebranto, '%Y-%m-%d')
-                            END AS FechaQuebranto,
-                            UltPagoTeorico, UltimoPago, UltPagoApl, Gestor, nCommission, nCommTax, vMotive,
-                            NOW() AS FechaGenerado
-                        FROM Stage_Quebrantos;";
-
-                    var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
-                    await insertCommand.ExecuteNonQueryAsync();
-
-                    logBuilder.AppendLine("Insert successful.");
-                    _logger.LogInformation("Insert successful.");
-
+                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
+                    await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Inserted data successfully into Quebrantos.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    var errorLog = $"Error executing insert: {ex.Message}";
-                    logBuilder.AppendLine(errorLog);
-                    _logger.LogError(ex, errorLog);
+                    logBuilder.AppendLine($"Error during insert: {ex.Message}");
                     throw;
                 }
             }
         }
     }
 
+    private async Task D6_InsertHistoricQuebrantos(DateTime fechaGenerado, StringBuilder logBuilder, string logPath)
+    {
+        var sqlInsertCommand = @"
+            INSERT INTO Quebrantos (
+                Operacion, Referencia, Nombre, Convenio, vFinancingTypeId, KVigente, KVencido, IntVencido,
+                IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, PagosRealizados, SdoPendiente,
+                IntXDevengar, SdoTotalXPagar, FechaQuebranto, UltPagoTeorico, UltimoPago, UltPagoApl,
+                Gestor, nCommission, nCommTax, vMotive, FechaGenerado
+            )
+            SELECT
+                Operacion, Referencia, Nombre, Convenio, vFinancingTypeId, KVigente, KVencido, IntVencido,
+                IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, PagosRealizados, SdoPendiente,
+                IntXDevengar, SdoTotalXPagar,
+                CASE
+                    WHEN FechaQuebranto = '0000-00-00' OR FechaQuebranto = '' THEN NULL
+                    ELSE STR_TO_DATE(FechaQuebranto, '%Y-%m-%d')
+                END AS FechaQuebranto,
+                UltPagoTeorico, UltimoPago, UltPagoApl, Gestor, nCommission, nCommTax, vMotive,
+                @FechaGenerado
+            FROM Stage_Quebrantos;";
+
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
+                    command.Parameters.AddWithValue("@FechaGenerado", fechaGenerado);
+                    await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Inserted historic data successfully into Quebrantos.");
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"Error during historic insert: {ex.Message}");
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task<string> D6_ConvertQuebrantosCsvToText(string csvFilePath, StringBuilder logBuilder)
+    {
+        var textFilePath = Path.ChangeExtension(csvFilePath, ".txt");
+        var sb = new StringBuilder();
+
+        try
+        {
+            using (var reader = new StreamReader(csvFilePath, Encoding.GetEncoding("windows-1252")))
+            {
+                string line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    sb.AppendLine(line.Replace(",", "|"));
+                }
+            }
+
+            await System.IO.File.WriteAllTextAsync(textFilePath, sb.ToString());
+            logBuilder.AppendLine($"Converted CSV to text: {textFilePath}");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error during conversion: {ex.Message}");
+            throw;
+        }
+
+        return textFilePath;
+    }
+
     private void D6_MoveFilesToHistoric(string originalFilePath, string textFilePath, StringBuilder logBuilder)
     {
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
 
-        // Move original file
-        var originalFileName = Path.GetFileNameWithoutExtension(originalFilePath);
-        var originalExtension = Path.GetExtension(originalFilePath);
-        var newOriginalFileName = $"{originalFileName}_{timestamp}{originalExtension}";
-        var newOriginalFilePath = Path.Combine(_historicFilePath, newOriginalFileName);
-        System.IO.File.Move(originalFilePath, newOriginalFilePath);
-        logBuilder.AppendLine($"Moved original file to historic: {newOriginalFilePath}");
-        _logger.LogInformation($"Moved original file to historic: {newOriginalFilePath}");
+        var originalHistoricPath = Path.Combine(_historicFilePath, $"{Path.GetFileNameWithoutExtension(originalFilePath)}_{timestamp}{Path.GetExtension(originalFilePath)}");
+        System.IO.File.Move(originalFilePath, originalHistoricPath);
+        logBuilder.AppendLine($"Moved original file to historic: {originalHistoricPath}");
 
-        // Move converted file
-        var textFileName = Path.GetFileNameWithoutExtension(textFilePath);
-        var textExtension = Path.GetExtension(textFilePath);
-        var newTextFileName = $"{textFileName}_{timestamp}{textExtension}";
-        var newTextFilePath = Path.Combine(_historicFilePath, newTextFileName);
-        System.IO.File.Move(textFilePath, newTextFilePath);
-        logBuilder.AppendLine($"Moved converted file to historic: {newTextFilePath}");
-        _logger.LogInformation($"Moved converted file to historic: {newTextFilePath}");
+        var textHistoricPath = Path.Combine(_historicFilePath, $"{Path.GetFileNameWithoutExtension(textFilePath)}_{timestamp}{Path.GetExtension(textFilePath)}");
+        System.IO.File.Move(textFilePath, textHistoricPath);
+        logBuilder.AppendLine($"Moved text file to historic: {textHistoricPath}");
     }
 
     private async Task D6_WriteLog(string logContent, string logPath)
     {
-        var historicLogPath = Path.Combine(_historicFilePath, $"BulkLoad_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+        var logDirectory = Path.GetDirectoryName(logPath);
+        var timestampedLogPath = Path.Combine(_historicFilePath, $"D6_Quebrantos_Log_{DateTime.Now:yyyy-MM-dd_HH-mm}.log");
+
         if (System.IO.File.Exists(logPath))
         {
-            // Move the existing log file to the historic folder
-            System.IO.File.Move(logPath, historicLogPath);
+            System.IO.File.Move(logPath, timestampedLogPath);
         }
-        // Write the new log content
+
         await System.IO.File.WriteAllTextAsync(logPath, logContent);
     }
 }

@@ -15,6 +15,7 @@ public class D5_Gestiones_Controller : Controller
     private readonly string _connectionString;
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
     private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
+    private readonly string _logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D5_Gestiones_Bulk.log";
 
     public D5_Gestiones_Controller(ILogger<D5_Gestiones_Controller> logger, IConfiguration configuration)
     {
@@ -25,7 +26,6 @@ public class D5_Gestiones_Controller : Controller
 
     public async Task<IActionResult> D5_ProcessFile()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadGestionesRO.log";
         var logBuilder = new StringBuilder();
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
         _logger.LogInformation("Process started.");
@@ -35,7 +35,7 @@ public class D5_Gestiones_Controller : Controller
         {
             logBuilder.AppendLine("File not found.");
             _logger.LogError("File not found.");
-            await D5_WriteLog(logBuilder.ToString(), logPath);
+            await D5_WriteLog(logBuilder.ToString());
             return NotFound("No files found.");
         }
 
@@ -45,20 +45,20 @@ public class D5_Gestiones_Controller : Controller
         try
         {
             await D5_LoadDataToStage(file, logBuilder);
-            await D5_ExecuteInsertFromStagingTable(logBuilder, logPath);
+            await D5_ExecuteInsertFromStagingTable(logBuilder);
             D5_MoveFileToHistoric(file, logBuilder);
         }
         catch (Exception ex)
         {
             logBuilder.AppendLine($"Error during processing: {ex.Message}");
             _logger.LogError(ex, "Error during processing.");
-            await D5_WriteLog(logBuilder.ToString(), logPath);
+            await D5_WriteLog(logBuilder.ToString());
             return StatusCode(500, "Error during processing.");
         }
 
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
         _logger.LogInformation("Process completed successfully.");
-        await D5_WriteLog(logBuilder.ToString(), logPath);
+        await D5_WriteLog(logBuilder.ToString());
         return Ok("File processed successfully.");
     }
 
@@ -78,10 +78,10 @@ public class D5_Gestiones_Controller : Controller
 
                     using (var workbook = new XLWorkbook(filePath))
                     {
-                        var worksheet = workbook.Worksheet(1); // Assuming data is in the first sheet
+                        var worksheet = workbook.Worksheet(1);
                         var rows = worksheet.RowsUsed();
 
-                        foreach (var row in rows.Skip(1)) // Skip header row
+                        foreach (var row in rows.Skip(1))
                         {
                             try
                             {
@@ -100,15 +100,15 @@ public class D5_Gestiones_Controller : Controller
                                 insertCommand.Parameters.AddWithValue("@Agencia_Registro", row.Cell(2).GetValue<string>());
                                 insertCommand.Parameters.AddWithValue("@Causa_No_Pago", row.Cell(3).GetValue<string>());
                                 insertCommand.Parameters.AddWithValue("@Causa_No_Domiciliacion", row.Cell(4).GetValue<string>());
-                                insertCommand.Parameters.AddWithValue("@Codigo_Accion", row.Cell(5).GetValue<long>()); // Use bigint
-                                insertCommand.Parameters.AddWithValue("@Codigo_Resultado", row.Cell(6).GetValue<long>());
+                                insertCommand.Parameters.AddWithValue("@Codigo_Accion", row.Cell(5).GetValue<string>());
+                                insertCommand.Parameters.AddWithValue("@Codigo_Resultado", row.Cell(6).GetValue<string>());
                                 insertCommand.Parameters.AddWithValue("@Comentarios", row.Cell(7).GetValue<string>());
                                 insertCommand.Parameters.AddWithValue("@Contacto_Generado", row.Cell(8).GetValue<string>());
                                 insertCommand.Parameters.AddWithValue("@Coordenadas", row.Cell(9).GetValue<string>());
-                                insertCommand.Parameters.AddWithValue("@Credito", row.Cell(10).GetValue<int>()); // Use bigint
+                                insertCommand.Parameters.AddWithValue("@Credito", row.Cell(10).GetValue<int>());
                                 insertCommand.Parameters.AddWithValue("@Estatus_Promesa", row.Cell(11).GetValue<string>());
-                                insertCommand.Parameters.AddWithValue("@Fecha_Actividad", FormatDateTime(row.Cell(12).GetValue<string>(), logBuilder)); // DateTime
-                                insertCommand.Parameters.AddWithValue("@Fecha_Promesa", FormatDate(row.Cell(13).GetValue<string>(), logBuilder)); // Date
+                                insertCommand.Parameters.AddWithValue("@Fecha_Actividad", FormatDateTime(row.Cell(12).GetValue<string>(), logBuilder));
+                                insertCommand.Parameters.AddWithValue("@Fecha_Promesa", FormatDate(row.Cell(13).GetValue<string>(), logBuilder));
                                 insertCommand.Parameters.AddWithValue("@Monto_Promesa", row.Cell(14).GetValue<decimal?>());
                                 insertCommand.Parameters.AddWithValue("@Origen", row.Cell(15).GetValue<string>());
                                 insertCommand.Parameters.AddWithValue("@Producto", row.Cell(16).GetValue<string>());
@@ -140,8 +140,32 @@ public class D5_Gestiones_Controller : Controller
         }
     }
 
-    private async Task D5_ExecuteInsertFromStagingTable(StringBuilder logBuilder, string logPath)
+    private async Task D5_ExecuteInsertFromStagingTable(StringBuilder logBuilder)
     {
+        var sqlInsertCommand = @"
+            INSERT INTO D5_Gestiones (
+                Agencia_Registro, Causa_No_Pago, Causa_No_Domiciliacion, Codigo_Accion, Codigo_Resultado,
+                Comentarios, Contacto_Generado, Coordenadas, Credito, Estatus_Promesa, Fecha_Actividad,
+                Fecha_Promesa, Monto_Promesa, Origen, Producto, Resultado, Telefono, Tipo_Pago, Usuario_Registro
+            )
+            SELECT 
+                s.Agencia_Registro, s.Causa_No_Pago, s.Causa_No_Domiciliacion, s.Codigo_Accion, s.Codigo_Resultado,
+                s.Comentarios, s.Contacto_Generado, s.Coordenadas, s.Credito, s.Estatus_Promesa, s.Fecha_Actividad,
+                s.Fecha_Promesa, s.Monto_Promesa, s.Origen, s.Producto, s.Resultado, s.Telefono, s.Tipo_Pago, s.Usuario_Registro
+            FROM D5_Stage_Gestiones s
+            WHERE NOT EXISTS (
+                SELECT 1 
+                FROM D5_Gestiones d
+                WHERE 
+                    s.Indice = d.Indice AND
+                    s.Agencia_Registro = d.Agencia_Registro AND
+                    s.Causa_No_Pago = d.Causa_No_Pago AND
+                    s.Causa_No_Domiciliacion = d.Causa_No_Domiciliacion AND
+                    s.Codigo_Accion = d.Codigo_Accion AND
+                    s.Codigo_Resultado = d.Codigo_Resultado AND
+                    s.Fecha_Actividad = d.Fecha_Actividad
+            );";
+
         using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
@@ -149,33 +173,17 @@ public class D5_Gestiones_Controller : Controller
             {
                 try
                 {
-                    var insertCommandText = @"
-                        INSERT INTO D5_Gestiones (
-                            Agencia_Registro, Causa_No_Pago, Causa_No_Domiciliacion, Codigo_Accion, Codigo_Resultado,
-                            Comentarios, Contacto_Generado, Coordenadas, Id_Credito, Estatus_Promesa, Fecha_Actividad,
-                            Fecha_Promesa, Monto_Promesa, Origen, Producto, Resultado, Telefono, Tipo_Pago, Usuario_Registro
-                        )
-                        SELECT
-                            Agencia_Registro, Causa_No_Pago, Causa_No_Domiciliacion, Codigo_Accion, Codigo_Resultado,
-                            Comentarios, Contacto_Generado, Coordenadas, Credito, Estatus_Promesa,
-                            STR_TO_DATE(Fecha_Actividad, '%Y-%m-%d %H:%i:%s'),
-                            STR_TO_DATE(Fecha_Promesa, '%Y-%m-%d'),
-                            Monto_Promesa, Origen, Producto, Resultado, Telefono, Tipo_Pago, Usuario_Registro
-                        FROM D5_Stage_Gestiones;";
-
-                    var insertCommand = new MySqlCommand(insertCommandText, connection, transaction);
-                    await insertCommand.ExecuteNonQueryAsync();
-
-                    logBuilder.AppendLine("Inserted data from D5_Stage_Gestiones into D5_Gestiones.");
-                    _logger.LogInformation("Inserted data from D5_Stage_Gestiones into D5_Gestiones.");
-
+                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
+                    await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Inserted only new rows from D5_Stage_Gestiones into D5_Gestiones.");
+                    _logger.LogInformation("Inserted only new rows from D5_Stage_Gestiones into D5_Gestiones.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"Error inserting data into final table: {ex.Message}");
-                    _logger.LogError(ex, "Error inserting data into final table.");
+                    logBuilder.AppendLine($"Error during insert: {ex.Message}");
+                    _logger.LogError(ex, "Error during insert.");
                     throw;
                 }
             }
@@ -185,10 +193,9 @@ public class D5_Gestiones_Controller : Controller
     private void D5_MoveFileToHistoric(string filePath, StringBuilder logBuilder)
     {
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-                var fileName = Path.GetFileNameWithoutExtension(filePath);
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
         var fileExtension = Path.GetExtension(filePath);
-        var newFileName = $"{fileName}_{timestamp}{fileExtension}";
-        var historicFilePath = Path.Combine(_historicFilePath, newFileName);
+        var historicFilePath = Path.Combine(_historicFilePath, $"{fileName}_{timestamp}{fileExtension}");
 
         try
         {
@@ -204,89 +211,49 @@ public class D5_Gestiones_Controller : Controller
         }
     }
 
+    private async Task D5_WriteLog(string logContent)
+    {
+        var historicLogPath = Path.Combine(_historicFilePath, $"D5_Gestiones_Log_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+
+        if (System.IO.File.Exists(_logPath))
+        {
+            System.IO.File.Move(_logPath, historicLogPath);
+            _logger.LogInformation($"Moved existing log to historic: {historicLogPath}");
+        }
+
+        await System.IO.File.WriteAllTextAsync(_logPath, logContent);
+        _logger.LogInformation($"New log written to: {_logPath}");
+    }
+
     private string FormatDateTime(string date, StringBuilder logBuilder)
     {
-        if (string.IsNullOrWhiteSpace(date))
-        {
-            logBuilder?.AppendLine($"Invalid date (empty or null): {date}");
-            return null;
-        }
+        if (string.IsNullOrWhiteSpace(date)) return null;
 
         try
         {
-            var culture = new System.Globalization.CultureInfo("es-ES");
-            var cleanedDate = date.Trim();
-
-            if (DateTime.TryParseExact(cleanedDate, "dd/MM/yyyy hh:mm:ss tt", culture, System.Globalization.DateTimeStyles.None, out DateTime parsedDateTime))
-            {
-                return parsedDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-            }
-
-            if (DateTime.TryParse(cleanedDate, culture, System.Globalization.DateTimeStyles.None, out parsedDateTime))
-            {
-                return parsedDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-            }
+            var parsedDateTime = DateTime.ParseExact(date.Trim(), "dd/MM/yyyy HH:mm:ss", null);
+            return parsedDateTime.ToString("yyyy-MM-dd HH:mm:ss");
         }
         catch (Exception ex)
         {
-            logBuilder?.AppendLine($"Unexpected error parsing datetime '{date}': {ex.Message}");
+            logBuilder.AppendLine($"Error parsing datetime '{date}': {ex.Message}");
+            return null;
         }
-
-        logBuilder?.AppendLine($"Failed to parse datetime: {date}");
-        return null;
     }
 
     private string FormatDate(string date, StringBuilder logBuilder)
     {
-        if (string.IsNullOrWhiteSpace(date))
+        if (string.IsNullOrWhiteSpace(date)) return null;
+
+        try
         {
-            logBuilder?.AppendLine($"Invalid date (empty or null): {date}");
+            var parsedDate = DateTime.ParseExact(date.Trim(), "dd/MM/yyyy", null);
+            return parsedDate.ToString("yyyy-MM-dd");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error parsing date '{date}': {ex.Message}");
             return null;
-        }
-
-        try
-        {
-            var culture = new System.Globalization.CultureInfo("es-ES");
-            var cleanedDate = date.Trim();
-
-            if (DateTime.TryParseExact(cleanedDate, "dd/MM/yyyy", culture, System.Globalization.DateTimeStyles.None, out DateTime parsedDate))
-            {
-                return parsedDate.ToString("yyyy-MM-dd");
-            }
-
-            if (DateTime.TryParse(cleanedDate, culture, System.Globalization.DateTimeStyles.None, out parsedDate))
-            {
-                return parsedDate.ToString("yyyy-MM-dd");
-            }
-        }
-        catch (Exception ex)
-        {
-            logBuilder?.AppendLine($"Unexpected error parsing date '{date}': {ex.Message}");
-        }
-
-        logBuilder?.AppendLine($"Failed to parse date: {date}");
-        return null;
-    }
-
-    private async Task D5_WriteLog(string logContent, string logPath)
-    {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var uniqueLogPath = Path.Combine(
-            Path.GetDirectoryName(logPath)!,
-            $"{Path.GetFileNameWithoutExtension(logPath)}_{timestamp}{Path.GetExtension(logPath)}"
-        );
-
-        try
-        {
-            await System.IO.File.WriteAllTextAsync(uniqueLogPath, logContent);
-            _logger.LogInformation($"Log written to: {uniqueLogPath}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error writing log.");
-            throw;
         }
     }
 }
-
-       
