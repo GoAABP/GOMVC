@@ -13,66 +13,138 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
     private readonly IConfiguration _configuration;
     private readonly string _connectionString;
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
-    private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
 
     public D4_Otorgamiento_Creditos_Controller(ILogger<D4_Otorgamiento_Creditos_Controller> logger, IConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
-        
-        // Register the encoding provider
-        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Handle special characters
     }
 
     public async Task<IActionResult> D4_ProcessOtorgamientoCreditos()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadOtorgamientoCreditos.log";
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D4_Otorgamiento_Creditos.log";
+        var archiveFolder = @"C:\Users\Go Credit\Documents\DATA\ARCHIVE";
+        var processedFolder = @"C:\Users\Go Credit\Documents\DATA\PROCESSED";
+        var errorFolder = @"C:\Users\Go Credit\Documents\DATA\ERROR";
         var logBuilder = new StringBuilder();
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
-        _logger.LogInformation("Process started.");
+        var hasErrors = false;
+
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D4 process started.");
+        _logger.LogInformation("D4 process started.");
 
         var files = Directory.GetFiles(_filePath, "BARTURO*.csv");
         if (files.Length == 0)
         {
-            logBuilder.AppendLine("File not found.");
-            _logger.LogError("File not found.");
+            var errorLog = "No files matching 'BARTURO*.csv' were found.";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(errorLog);
             await D4_WriteLog(logBuilder.ToString(), logPath);
-            return NotFound("No files found.");
+            return StatusCode(500, errorLog); // Return a 500 error if no files are found
         }
 
-        var file = files[0];
-        logBuilder.AppendLine($"File found: {file}");
+        foreach (var file in files)
+        {
+            logBuilder.AppendLine($"Processing file: {file}");
 
-        // Convert file encoding to UTF-8 with BOM
-        var convertedFilePath = ConvertToUTF8WithBOM(file);
-        logBuilder.AppendLine($"Converted file encoding to UTF-8 with BOM: {convertedFilePath}");
+            try
+            {
+                // Step 1: Convert file to UTF-8 with BOM
+                var convertedFilePath = D4_ConvertToUTF8WithBOM(file);
+                logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-        // Optional: Validate the converted file
-        ValidateFile(convertedFilePath, logBuilder);
+                // Step 2: Preprocess (sanitize) the file
+                var sanitizedFilePath = D4_PreprocessCsvFile(convertedFilePath, logBuilder);
+                logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
+
+                // Step 3: Load sanitized data into stage table
+                await D4_LoadDataToStage(sanitizedFilePath, logBuilder);
+
+                // Step 4: Insert validated data into the final table
+                await D4_InsertValidatedData(logBuilder);
+
+                // Step 5: Move files to archive/processed folders upon successful processing
+                D4_MoveFile(file, archiveFolder); // Move original file
+                D4_MoveFile(convertedFilePath, processedFolder); // Move UTF-8 file
+                D4_MoveFile(sanitizedFilePath, processedFolder); // Move sanitized file
+
+                logBuilder.AppendLine($"File {file} processed successfully.");
+            }
+            catch (Exception ex)
+            {
+                logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
+                _logger.LogError(ex, $"Error processing file {file}");
+                hasErrors = true;
+
+                // Move problematic files to error folder for debugging
+                D4_MoveFile(file, errorFolder);
+            }
+        }
+
+        // Log completion
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D4 process completed.");
+        _logger.LogInformation("D4 process completed.");
+        await D4_WriteLog(logBuilder.ToString(), logPath);
+
+        // Decide the response based on whether errors occurred
+        if (hasErrors)
+        {
+            return StatusCode(500, "D4 process completed with errors. Check the log for details.");
+        }
+
+        return Ok("D4 process completed successfully."); // Success
+    }
+
+    private string D4_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
+    {
+        var sanitizedFilePath = Path.Combine(
+            Path.GetDirectoryName(inputFilePath)!,
+            Path.GetFileNameWithoutExtension(inputFilePath) + "_sanitized.csv"
+        );
 
         try
         {
-            await D4_LoadDataToStageWithCondition(convertedFilePath, logBuilder);
-            await D4_ExecuteInsert(logBuilder, logPath);
-            D4_MoveFileToHistoric(file, logBuilder);
-            D4_MoveFileToHistoric(convertedFilePath, logBuilder); // Move the converted file too
+            using (var reader = new StreamReader(inputFilePath))
+            using (var writer = new StreamWriter(sanitizedFilePath))
+            {
+                string? line;
+                bool headerProcessed = false;
+
+                while ((line = reader.ReadLine()) != null)
+                {
+                    // Write header row without validation
+                    if (!headerProcessed)
+                    {
+                        writer.WriteLine(line);
+                        headerProcessed = true;
+                        continue;
+                    }
+
+                    // Split the line and check for stopper
+                    var columns = line.Split(',');
+                    if (columns[0].Trim() == "0")
+                    {
+                        logBuilder.AppendLine("Stopper '0' found in the first column. Stopping further processing.");
+                        break;
+                    }
+
+                    writer.WriteLine(line);
+                }
+            }
+
+            logBuilder.AppendLine($"File successfully sanitized: {sanitizedFilePath}");
         }
         catch (Exception ex)
         {
-            logBuilder.AppendLine($"Error during processing: {ex.Message}");
-            _logger.LogError(ex, "Error during processing.");
-            await D4_WriteLog(logBuilder.ToString(), logPath);
-            return StatusCode(500, "Error during processing.");
+            logBuilder.AppendLine($"Error during preprocessing: {ex.Message}");
+            throw;
         }
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
-        _logger.LogInformation("Process completed successfully.");
-        await D4_WriteLog(logBuilder.ToString(), logPath);
-        return Ok("File processed successfully.");
+        return sanitizedFilePath;
     }
 
-    private async Task D4_LoadDataToStageWithCondition(string csvFilePath, StringBuilder logBuilder)
+    private async Task D4_LoadDataToStage(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -81,136 +153,35 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
             {
                 try
                 {
-                    // Convert the file to UTF-8 encoding before processing
-                    logBuilder.AppendLine("Converting file encoding to UTF-8...");
-                    var convertedFilePath = ConvertFileEncoding(csvFilePath, Encoding.GetEncoding("Windows-1252"), Encoding.UTF8);
-
                     var truncateCommand = new MySqlCommand("TRUNCATE TABLE D4_Stage_Otorgamiento_Creditos;", connection, transaction);
                     await truncateCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Truncated table D4_Stage_Otorgamiento_Creditos.");
-                    _logger.LogInformation("Truncated table D4_Stage_Otorgamiento_Creditos.");
 
-                    using (var reader = new StreamReader(convertedFilePath, Encoding.UTF8))
-                    {
-                        string line;
-                        bool isHeader = true;
-
-                        while (!reader.EndOfStream)
-                        {
-                            line = await reader.ReadLineAsync();
-
-                            if (isHeader)
-                            {
-                                isHeader = false;
-                                continue;
-                            }
-
-                            var values = line.Split(',');
-
-                            if (values.Length > 0 && values[0].Trim() == "0")
-                            {
-                                logBuilder.AppendLine("Encountered row with '0' in the first column. Stopping further insertion.");
-                                break;
-                            }
-
-                            try
-                            {
-                                var insertCommand = new MySqlCommand(@"
-                                    INSERT INTO D4_Stage_Otorgamiento_Creditos (
-                                        Id_Credito, Referencia, Nombre, Fecha_Apertura, F_Cobro, Id_Convenio, Convenio, Id_Sucursal, Sucursal,
-                                        Capital, Primer_Pago, Comision, IVA, Cobertura, IVA_Cobertura, Disposicion, Monto_Retenido, Pago_de_Deuda,
-                                        Comision_Financiada, IVA_Comision_Financiada, Solicitud, Vendedor, Nombre_Vendedor, TipoVendedor, vSupervisorId,
-                                        vSupName, Producto, Descripcion_Tasa, Persona, Plazo, Id_Producto, vCampaign, Tipo_de_Financiamiento,
-                                        vFinancingTypeId, vAliado
-                                    ) VALUES (
-                                        @Id_Credito, @Referencia, @Nombre, @Fecha_Apertura, @F_Cobro, @Id_Convenio, @Convenio, @Id_Sucursal, @Sucursal,
-                                        @Capital, @Primer_Pago, @Comision, @IVA, @Cobertura, @IVA_Cobertura, @Disposicion, @Monto_Retenido, @Pago_de_Deuda,
-                                        @Comision_Financiada, @IVA_Comision_Financiada, @Solicitud, @Vendedor, @Nombre_Vendedor, @TipoVendedor, @vSupervisorId,
-                                        @vSupName, @Producto, @Descripcion_Tasa, @Persona, @Plazo, @Id_Producto, @vCampaign, @Tipo_de_Financiamiento,
-                                        @vFinancingTypeId, @vAliado
-                                    );", connection, transaction);
-
-                                insertCommand.Parameters.AddWithValue("@Id_Credito", ParseInteger(values[0]));
-                                insertCommand.Parameters.AddWithValue("@Referencia", ParseString(values[1]));
-                                insertCommand.Parameters.AddWithValue("@Nombre", ParseString(values[2]));
-                                insertCommand.Parameters.AddWithValue("@Fecha_Apertura", ParseDate(values[3]));
-                                insertCommand.Parameters.AddWithValue("@F_Cobro", ParseDate(values[4]));
-                                insertCommand.Parameters.AddWithValue("@Id_Convenio", ParseInteger(values[5]));
-                                insertCommand.Parameters.AddWithValue("@Convenio", ParseString(values[6]));
-                                insertCommand.Parameters.AddWithValue("@Id_Sucursal", ParseInteger(values[7]));
-                                insertCommand.Parameters.AddWithValue("@Sucursal", ParseString(values[8]));
-                                insertCommand.Parameters.AddWithValue("@Capital", ParseDecimal(values[9]));
-                                insertCommand.Parameters.AddWithValue("@Primer_Pago", ParseDate(values[10]));
-                                insertCommand.Parameters.AddWithValue("@Comision", ParseDecimal(values[11]));
-                                insertCommand.Parameters.AddWithValue("@IVA", ParseDecimal(values[12]));
-                                insertCommand.Parameters.AddWithValue("@Cobertura", ParseDecimal(values[13]));
-                                insertCommand.Parameters.AddWithValue("@IVA_Cobertura", ParseDecimal(values[14]));
-                                insertCommand.Parameters.AddWithValue("@Disposicion", ParseDecimal(values[15]));
-                                insertCommand.Parameters.AddWithValue("@Monto_Retenido", ParseDecimal(values[16]));
-                                insertCommand.Parameters.AddWithValue("@Pago_de_Deuda", ParseDecimal(values[17]));
-                                insertCommand.Parameters.AddWithValue("@Comision_Financiada", ParseDecimal(values[18]));
-                                insertCommand.Parameters.AddWithValue("@IVA_Comision_Financiada", ParseDecimal(values[19]));
-                                insertCommand.Parameters.AddWithValue("@Solicitud", ParseString(values[20]));
-                                insertCommand.Parameters.AddWithValue("@Vendedor", ParseInteger(values[21]));
-                                insertCommand.Parameters.AddWithValue("@Nombre_Vendedor", ParseString(values[22]));
-                                insertCommand.Parameters.AddWithValue("@TipoVendedor", ParseString(values[23]));
-                                insertCommand.Parameters.AddWithValue("@vSupervisorId", ParseInteger(values[24]));
-                                insertCommand.Parameters.AddWithValue("@vSupName", ParseString(values[25]));
-                                insertCommand.Parameters.AddWithValue("@Producto", ParseString(values[26]));
-                                insertCommand.Parameters.AddWithValue("@Descripcion_Tasa", ParseString(values[27]));
-                                insertCommand.Parameters.AddWithValue("@Persona", ParseString(values[28]));
-                                insertCommand.Parameters.AddWithValue("@Plazo", ParseInteger(values[29]));
-                                insertCommand.Parameters.AddWithValue("@Id_Producto", ParseInteger(values[30]));
-                                insertCommand.Parameters.AddWithValue("@vCampaign", ParseString(values[31]));
-                                insertCommand.Parameters.AddWithValue("@Tipo_de_Financiamiento", ParseString(values[32]));
-                                insertCommand.Parameters.AddWithValue("@vFinancingTypeId", ParseString(values[33]));
-                                insertCommand.Parameters.AddWithValue("@vAliado", ParseString(values[34]));
-
-                                await insertCommand.ExecuteNonQueryAsync();
-                            }
-                            catch (Exception ex)
-                            {
-                                logBuilder.AppendLine($"Error processing row: {line} - {ex.Message}");
-                                _logger.LogWarning($"Error processing row: {line} - {ex.Message}");
-                                throw;
-                            }
-                        }
-                    }
+                    var loadCommandText = "LOAD DATA LOCAL INFILE '" +
+                        csvFilePath.Replace("\\", "\\\\") +
+                        "' INTO TABLE D4_Stage_Otorgamiento_Creditos " +
+                        "FIELDS TERMINATED BY ',' " +
+                        "ENCLOSED BY '\"' " +
+                        "LINES TERMINATED BY '\\n' " +
+                        "IGNORE 1 LINES;";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Loaded data into D4_Stage_Otorgamiento_Creditos.");
 
                     await transaction.CommitAsync();
-                    logBuilder.AppendLine("Data loaded into D4_Stage_Otorgamiento_Creditos.");
-
-                    // Move the converted file to historic folder
-                    D4_MoveFileToHistoric(convertedFilePath, logBuilder);
-                    logBuilder.AppendLine("Converted file moved to historic folder.");
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"Error loading data into stage table: {ex.Message}");
+                    logBuilder.AppendLine($"Error during bulk insert: {ex.Message}");
+                    _logger.LogError(ex, "Error during bulk insert.");
                     throw;
                 }
             }
         }
     }
 
-    private string ConvertFileEncoding(string filePath, Encoding sourceEncoding, Encoding targetEncoding)
-    {
-        var newFilePath = Path.Combine(
-            Path.GetDirectoryName(filePath)!,
-            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
-        );
-
-        using (var reader = new StreamReader(filePath, sourceEncoding))
-        using (var writer = new StreamWriter(newFilePath, false, targetEncoding))
-        {
-            writer.Write(reader.ReadToEnd());
-        }
-
-        return newFilePath;
-    }
-
-    private async Task D4_ExecuteInsert(StringBuilder logBuilder, string logPath)
+    private async Task D4_InsertValidatedData(StringBuilder logBuilder)
     {
         var sqlInsertCommand = @"
             INSERT INTO D4_Otorgamiento_Creditos (
@@ -218,23 +189,60 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
                 Capital, Primer_Pago, Comision, IVA, Cobertura, IVA_Cobertura, Disposicion, Monto_Retenido, Pago_de_Deuda,
                 Comision_Financiada, IVA_Comision_Financiada, Solicitud, Vendedor, Nombre_Vendedor, TipoVendedor, vSupervisorId,
                 vSupName, Producto, Descripcion_Tasa, Persona, Plazo, Id_Producto, vCampaign, Tipo_de_Financiamiento,
-                vFinancingTypeId, vAliado
+                vFinancingTypeId, vAliado, vComisionable, vSolActivas
             )
             SELECT 
-                Id_Credito, Referencia, Nombre, Fecha_Apertura, F_Cobro, Id_Convenio, Convenio, Id_Sucursal, Sucursal,
-                Capital, Primer_Pago, Comision, IVA, Cobertura, IVA_Cobertura, Disposicion, Monto_Retenido, Pago_de_Deuda,
-                Comision_Financiada, IVA_Comision_Financiada, Solicitud, Vendedor, Nombre_Vendedor, TipoVendedor, vSupervisorId,
-                vSupName, Producto, Descripcion_Tasa, Persona, Plazo, Id_Producto, vCampaign, Tipo_de_Financiamiento,
-                vFinancingTypeId, vAliado
-            FROM D4_Stage_Otorgamiento_Creditos
+                s.Id_Credito, s.Referencia, s.Nombre,
+                STR_TO_DATE(NULLIF(s.Fecha_Apertura, ''), '%d/%m/%Y') AS Fecha_Apertura,
+                STR_TO_DATE(NULLIF(s.F_Cobro, ''), '%d/%m/%Y') AS F_Cobro,
+                s.Id_Convenio, s.Convenio, s.Id_Sucursal, s.Sucursal,
+                s.Capital, STR_TO_DATE(NULLIF(s.Primer_Pago, ''), '%d/%m/%Y') AS Primer_Pago, s.Comision, s.IVA, s.Cobertura,
+                s.IVA_Cobertura, s.Disposicion, s.Monto_Retenido, s.Pago_de_Deuda, s.Comision_Financiada, s.IVA_Comision_Financiada,
+                s.Solicitud, s.Vendedor, s.Nombre_Vendedor, s.TipoVendedor, s.vSupervisorId, s.vSupName, s.Producto,
+                s.Descripcion_Tasa, s.Persona, s.Plazo, s.Id_Producto, s.vCampaign, s.Tipo_de_Financiamiento,
+                s.vFinancingTypeId, s.vAliado, s.vComisionable, s.vSolActivas
+            FROM D4_Stage_Otorgamiento_Creditos s
             WHERE NOT EXISTS (
-                SELECT 1
-                FROM D4_Otorgamiento_Creditos
+                SELECT 1 
+                FROM D4_Otorgamiento_Creditos t
                 WHERE 
-                    D4_Otorgamiento_Creditos.Id_Credito = D4_Stage_Otorgamiento_Creditos.Id_Credito
-                    AND D4_Otorgamiento_Creditos.Referencia = D4_Stage_Otorgamiento_Creditos.Referencia
-                    AND D4_Otorgamiento_Creditos.Nombre = D4_Stage_Otorgamiento_Creditos.Nombre
-                    AND D4_Otorgamiento_Creditos.Fecha_Apertura = D4_Stage_Otorgamiento_Creditos.Fecha_Apertura
+                    s.Id_Credito = t.Id_Credito
+                    AND s.Referencia = t.Referencia
+                    AND s.Nombre = t.Nombre
+                    AND STR_TO_DATE(NULLIF(s.Fecha_Apertura, ''), '%d/%m/%Y') = t.Fecha_Apertura
+                    AND STR_TO_DATE(NULLIF(s.F_Cobro, ''), '%d/%m/%Y') = t.F_Cobro
+                    AND s.Id_Convenio = t.Id_Convenio
+                    AND s.Convenio = t.Convenio
+                    AND s.Id_Sucursal = t.Id_Sucursal
+                    AND s.Sucursal = t.Sucursal
+                    AND s.Capital = t.Capital
+                    AND STR_TO_DATE(NULLIF(s.Primer_Pago, ''), '%d/%m/%Y') = t.Primer_Pago
+                    AND s.Comision = t.Comision
+                    AND s.IVA = t.IVA
+                    AND s.Cobertura = t.Cobertura
+                    AND s.IVA_Cobertura = t.IVA_Cobertura
+                    AND s.Disposicion = t.Disposicion
+                    AND s.Monto_Retenido = t.Monto_Retenido
+                    AND s.Pago_de_Deuda = t.Pago_de_Deuda
+                    AND s.Comision_Financiada = t.Comision_Financiada
+                    AND s.IVA_Comision_Financiada = t.IVA_Comision_Financiada
+                    AND s.Solicitud = t.Solicitud
+                    AND s.Vendedor = t.Vendedor
+                    AND s.Nombre_Vendedor = t.Nombre_Vendedor
+                    AND s.TipoVendedor = t.TipoVendedor
+                    AND s.vSupervisorId = t.vSupervisorId
+                    AND s.vSupName = t.vSupName
+                    AND s.Producto = t.Producto
+                    AND s.Descripcion_Tasa = t.Descripcion_Tasa
+                    AND s.Persona = t.Persona
+                    AND s.Plazo = t.Plazo
+                    AND s.Id_Producto = t.Id_Producto
+                    AND s.vCampaign = t.vCampaign
+                    AND s.Tipo_de_Financiamiento = t.Tipo_de_Financiamiento
+                    AND s.vFinancingTypeId = t.vFinancingTypeId
+                    AND s.vAliado = t.vAliado
+                    AND s.vComisionable = t.vComisionable
+                    AND s.vSolActivas = t.vSolActivas
             );";
 
         using (var connection = new MySqlConnection(_connectionString))
@@ -244,91 +252,32 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
             {
                 try
                 {
+                    logBuilder.AppendLine("Executing validated data insert query using NOT EXISTS...");
+
                     var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
-                    await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Data inserted into D4_Otorgamiento_Creditos.");
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+
+                    logBuilder.AppendLine($"Inserted {rowsAffected} rows into D4_Otorgamiento_Creditos.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
                     logBuilder.AppendLine($"Error inserting data: {ex.Message}");
+                    _logger.LogError(ex, "Error inserting data.");
                     throw;
                 }
             }
         }
     }
 
-
-    private string? ParseString(string value)
+    private string D4_ConvertToUTF8WithBOM(string filePath)
     {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim('"').Trim();
-    }
-
-    private int? ParseInteger(string value)
-    {
-        value = value.Trim('"').Trim();
-        return string.IsNullOrWhiteSpace(value) ? null : (int.TryParse(value, out var result) ? result : null);
-    }
-
-    private decimal? ParseDecimal(string value)
-    {
-        value = value.Trim('"').Trim();
-        return string.IsNullOrWhiteSpace(value) ? null : (decimal.TryParse(value, out var result) ? result : null);
-    }
-
-    private DateTime? ParseDate(string value)
-    {
-        value = value.Trim('"').Trim();
-        return string.IsNullOrWhiteSpace(value) ? null : (DateTime.TryParse(value, out var result) ? result : null);
-    }
-
-    private void D4_MoveFileToHistoric(string filePath, StringBuilder logBuilder)
-    {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var historicFilePath = Path.Combine(_historicFilePath, $"{Path.GetFileNameWithoutExtension(filePath)}_{timestamp}{Path.GetExtension(filePath)}");
-        System.IO.File.Move(filePath, historicFilePath);
-        logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
-    }
-
-    private async Task D4_WriteLog(string logContent, string logPath)
-    {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var uniqueLogPath = Path.Combine(
-            Path.GetDirectoryName(logPath)!,
-            $"{Path.GetFileNameWithoutExtension(logPath)}_{timestamp}{Path.GetExtension(logPath)}"
-        );
-
-        await System.IO.File.WriteAllTextAsync(uniqueLogPath, logContent);
-        _logger.LogInformation($"Log written to: {uniqueLogPath}");
-    }
-
-    private void ValidateFile(string filePath, StringBuilder logBuilder)
-    {
-        using (var reader = new StreamReader(filePath, Encoding.UTF8))
-        {
-            while (!reader.EndOfStream)
-            {
-                string line = reader.ReadLine();
-                if (line.Contains("�"))
-                {
-                    logBuilder.AppendLine($"Warning: Line contains invalid characters: {line}");
-                }
-            }
-        }
-    }
-
-    private string ConvertToUTF8WithBOM(string filePath)
-    {
-        // Register the encoding provider to handle legacy encodings like Windows-1252
-        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-
         var newFilePath = Path.Combine(
             Path.GetDirectoryName(filePath)!,
             Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
         );
 
-        // Use Windows-1252 encoding for reading and UTF-8 with BOM for writing
         using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
         using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
         {
@@ -339,5 +288,63 @@ public class D4_Otorgamiento_Creditos_Controller : Controller
         }
 
         return newFilePath;
-    }    
+    }
+
+    private void D4_MoveFile(string sourceFilePath, string destinationFolder)
+    {
+        try
+        {
+            if (!Directory.Exists(destinationFolder))
+            {
+                Directory.CreateDirectory(destinationFolder);
+            }
+
+            var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
+            if (System.IO.File.Exists(destinationFilePath))
+            {
+                System.IO.File.Delete(destinationFilePath); // Overwrite existing file
+            }
+
+            System.IO.File.Move(sourceFilePath, destinationFilePath);
+            _logger.LogInformation($"File moved: {sourceFilePath} -> {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to move file: {sourceFilePath} -> {destinationFolder}");
+            throw;
+        }
+    }
+
+    private async Task D4_WriteLog(string content, string logPath)
+    {
+        await System.IO.File.WriteAllTextAsync(logPath, content);
+    }
+
+    private void D4_MoveLogToHistoric(string logPath, string historicLogsFolder)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(logPath))
+            {
+                _logger.LogWarning($"Log file does not exist: {logPath}");
+                return;
+            }
+
+            if (!Directory.Exists(historicLogsFolder))
+            {
+                Directory.CreateDirectory(historicLogsFolder);
+            }
+
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
+            var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
+
+            System.IO.File.Move(logPath, destinationFilePath);
+            _logger.LogInformation($"Log file moved to historic logs: {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to move log file to historic logs.");
+        }
+    }
 }

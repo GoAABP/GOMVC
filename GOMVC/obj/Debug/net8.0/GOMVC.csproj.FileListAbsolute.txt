@@ -11,6 +11,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Azure.Identity.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\BouncyCastle.Cryptography.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\ClosedXML.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\ClosedXML.Parser.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\CsvHelper.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\DocumentFormat.OpenXml.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\DocumentFormat.OpenXml.Framework.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\EPPlus.dll

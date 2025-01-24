@@ -7,6 +7,9 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using CsvHelper;
+using CsvHelper.Configuration;
+using System.Globalization;
 
 public class D2_Saldos_Contables_Controller : Controller
 {
@@ -21,71 +24,88 @@ public class D2_Saldos_Contables_Controller : Controller
         _logger = logger;
         _configuration = configuration;
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Handle special characters
     }
 
-    public async Task D2_ProcessSaldosContables()
+    // Process current files
+    public async Task<IActionResult> D2_ProcessSaldosContables()
     {
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D2_Saldos_Contables_Bulk.log";
         var logBuilder = new StringBuilder();
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
         _logger.LogInformation("Process started.");
 
-        var files = Directory.GetFiles(_filePath, "SaldosContables*.csv");
+        var files = Directory.GetFiles(_filePath, "SDOSCONT*.csv");
         if (files.Length == 0)
         {
-            var errorLog = "File not found.";
+            var errorLog = "No files matching 'SDOSCONT*.csv' found.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
             await D2_WriteLog(logBuilder.ToString(), logPath);
-            throw new FileNotFoundException(errorLog);
-        }
-
-        var file = files[0];
-        logBuilder.AppendLine($"File found: {file}");
-
-        try
-        {
-            await D2_BulkInsertSaldosContablesData(file, logBuilder);
-            await D2_ExecuteSaldosContablesInsert(logBuilder, logPath);
-            D2_MoveFilesToHistoric(file, logBuilder);
-        }
-        catch (Exception ex)
-        {
-            logBuilder.AppendLine($"Error: {ex.Message}");
-            _logger.LogError(ex, "Error during processing.");
-            await D2_WriteLog(logBuilder.ToString(), logPath);
-            throw;
-        }
-
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
-        _logger.LogInformation("Process completed successfully.");
-        await D2_WriteLog(logBuilder.ToString(), logPath);
-    }
-
-    public async Task D2_ProcessHistoricSaldosContables()
-    {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D2_Saldos_Contables_Historic_Bulk.log";
-        var logBuilder = new StringBuilder();
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process started.");
-        _logger.LogInformation("Historic process started.");
-
-        var files = Directory.GetFiles(_filePath, "SaldosContables_*.csv");
-        if (files.Length == 0)
-        {
-            var errorLog = "No historic files found.";
-            logBuilder.AppendLine(errorLog);
-            _logger.LogError(errorLog);
-            await D2_WriteLog(logBuilder.ToString(), logPath);
-            throw new FileNotFoundException(errorLog);
+            return NotFound(errorLog);
         }
 
         foreach (var file in files)
         {
             logBuilder.AppendLine($"Processing file: {file}");
+
+            try
+            {
+                var convertedFilePath = ConvertToUTF8WithBOM(file);
+                logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
+
+                var sanitizedFilePath = PreprocessCsvFile(convertedFilePath, logBuilder);
+                logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
+
+                ValidateFile(sanitizedFilePath, logBuilder);
+
+                await D2_BulkInsertSaldosContablesData(sanitizedFilePath, logBuilder);
+
+                await D2_ExecuteSaldosContablesInsert(logBuilder, logPath);
+
+                D2_MoveFilesToHistoric(file, logBuilder);
+                D2_MoveFilesToHistoric(sanitizedFilePath, logBuilder);
+            }
+            catch (Exception ex)
+            {
+                logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
+                _logger.LogError(ex, $"Error processing file {file}.");
+            }
+        }
+
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed.");
+        _logger.LogInformation("Process completed.");
+        await D2_WriteLog(logBuilder.ToString(), logPath);
+
+        return Ok("Files processed successfully.");
+    }
+
+    // Process historic files
+    public async Task<IActionResult> D2_ProcessHistoricSaldosContables()
+    {
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D2_Saldos_Contables_Historic.log";
+        var logBuilder = new StringBuilder();
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process started.");
+        _logger.LogInformation("Historic process started.");
+
+        var files = Directory.GetFiles(_filePath, "SDOSCONT_*.csv");
+        if (files.Length == 0)
+        {
+            var errorLog = "No historic files matching 'SDOSCONT_*.csv' found.";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(errorLog);
+            await D2_WriteLog(logBuilder.ToString(), logPath);
+            return NotFound(errorLog);
+        }
+
+        foreach (var file in files)
+        {
+            logBuilder.AppendLine($"Processing file: {file}");
+
             try
             {
                 var fileName = Path.GetFileNameWithoutExtension(file);
-                var match = Regex.Match(fileName, @"SaldosContables_(\d{2})(\d{2})(\d{4})(Morning|Afternoon|Night)");
+                var match = Regex.Match(fileName, @"SDOSCONT_(\d{2})(\d{2})(\d{4})");
 
                 if (!match.Success)
                 {
@@ -98,23 +118,16 @@ public class D2_Saldos_Contables_Controller : Controller
                 var day = int.Parse(match.Groups[1].Value);
                 var month = int.Parse(match.Groups[2].Value);
                 var year = int.Parse(match.Groups[3].Value);
-                var period = match.Groups[4].Value;
-
-                var parsedDate = new DateTime(year, month, day);
-                var defaultTime = period switch
-                {
-                    "Morning" => new TimeSpan(8, 0, 0),
-                    "Afternoon" => new TimeSpan(14, 0, 0),
-                    "Night" => new TimeSpan(20, 0, 0),
-                    _ => throw new InvalidOperationException("Unknown period.")
-                };
-                var fechaGenerado = parsedDate.Add(defaultTime);
+                var fechaGenerado = new DateTime(year, month, day);
 
                 logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
 
-                await D2_BulkInsertSaldosContablesData(file, logBuilder);
+                var sanitizedFilePath = PreprocessCsvFile(file, logBuilder);
+                await D2_BulkInsertSaldosContablesData(sanitizedFilePath, logBuilder);
                 await D2_InsertHistoricSaldosContables(fechaGenerado, logBuilder, logPath);
+
                 D2_MoveFilesToHistoric(file, logBuilder);
+                D2_MoveFilesToHistoric(sanitizedFilePath, logBuilder);
             }
             catch (Exception ex)
             {
@@ -126,37 +139,83 @@ public class D2_Saldos_Contables_Controller : Controller
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process completed.");
         _logger.LogInformation("Historic process completed.");
         await D2_WriteLog(logBuilder.ToString(), logPath);
+
+        return Ok("Historic files processed successfully.");
     }
 
-    private async Task<bool> ValidateInsertPeriod(MySqlConnection connection, DateTime currentTime)
+    // Preprocess the CSV to fix malformed rows
+    private string PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
     {
-        string period = currentTime.TimeOfDay switch
+        var sanitizedFilePath = Path.Combine(
+            Path.GetDirectoryName(inputFilePath)!,
+            Path.GetFileNameWithoutExtension(inputFilePath) + "_sanitized.csv"
+        );
+
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
-            var t when t >= TimeSpan.FromHours(0) && t <= TimeSpan.FromHours(10) => "Morning",
-            var t when t > TimeSpan.FromHours(10) && t <= TimeSpan.FromHours(17) => "Afternoon",
-            _ => "Night"
+            BadDataFound = null, // Ignore malformed rows
+            TrimOptions = TrimOptions.Trim, // Trim leading/trailing whitespace
         };
 
-        string query = @"
-            SELECT COUNT(*)
-            FROM D2_Saldos_Contables
-            WHERE DATE(FechaGenerado) = @Today
-              AND CASE
-                  WHEN TIME(FechaGenerado) BETWEEN '00:00:00' AND '10:00:00' THEN 'Morning'
-                  WHEN TIME(FechaGenerado) BETWEEN '10:01:00' AND '17:00:00' THEN 'Afternoon'
-                  WHEN TIME(FechaGenerado) BETWEEN '17:01:00' AND '23:59:59' THEN 'Night'
-              END = @Period";
-
-        using (var command = new MySqlCommand(query, connection))
+        try
         {
-            command.Parameters.AddWithValue("@Today", currentTime.Date);
-            command.Parameters.AddWithValue("@Period", period);
+            using (var reader = new StreamReader(inputFilePath))
+            using (var csvReader = new CsvReader(reader, config))
+            using (var writer = new StreamWriter(sanitizedFilePath))
+            using (var csvWriter = new CsvWriter(writer, config))
+            {
+                var records = csvReader.GetRecords<dynamic>();
+                csvWriter.WriteRecords(records);
+            }
+            logBuilder.AppendLine($"Successfully sanitized file: {sanitizedFilePath}");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error sanitizing file: {ex.Message}");
+            throw;
+        }
 
-            int count = Convert.ToInt32(await command.ExecuteScalarAsync());
-            return count == 0;
+        return sanitizedFilePath;
+    }
+
+    // Bulk insert into staging table
+    private async Task D2_BulkInsertSaldosContablesData(string csvFilePath, StringBuilder logBuilder)
+    {
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D2_Stage_Saldos_Contables;", connection, transaction);
+                    await truncateCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Truncated table D2_Stage_Saldos_Contables.");
+
+                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
+                                          "INTO TABLE D2_Stage_Saldos_Contables " +
+                                          "FIELDS TERMINATED BY ',' " +
+                                          "ENCLOSED BY '\"' " +
+                                          "LINES TERMINATED BY '\\n' " +
+                                          "IGNORE 1 LINES;";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Bulk inserted data into D2_Stage_Saldos_Contables.");
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"Error during bulk insert: {ex.Message}");
+                    _logger.LogError(ex, "Error during bulk insert.");
+                    throw;
+                }
+            }
         }
     }
 
+    // Insert data from staging table to final table
     private async Task D2_ExecuteSaldosContablesInsert(StringBuilder logBuilder, string logPath)
     {
         var sqlInsertCommand = @"
@@ -191,17 +250,6 @@ public class D2_Saldos_Contables_Controller : Controller
         using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-
-            // Validate period before proceeding
-            if (!await ValidateInsertPeriod(connection, DateTime.Now))
-            {
-                var errorMessage = "An insert for this period already exists.";
-                logBuilder.AppendLine(errorMessage);
-                _logger.LogError(errorMessage);
-                await D2_WriteLog(logBuilder.ToString(), logPath);
-                throw new InvalidOperationException(errorMessage);
-            }
-
             using (var transaction = await connection.BeginTransactionAsync())
             {
                 try
@@ -223,6 +271,7 @@ public class D2_Saldos_Contables_Controller : Controller
         }
     }
 
+    // Insert historic data into final table
     private async Task D2_InsertHistoricSaldosContables(DateTime fechaGenerado, StringBuilder logBuilder, string logPath)
     {
         var sqlInsertCommand = @"
@@ -279,80 +328,56 @@ public class D2_Saldos_Contables_Controller : Controller
         }
     }
 
-    private async Task D2_BulkInsertSaldosContablesData(string csvFilePath, StringBuilder logBuilder)
+    // Validate file for invalid characters
+    private void ValidateFile(string filePath, StringBuilder logBuilder)
     {
-        using (var connection = new MySqlConnection(_connectionString))
+        using (var reader = new StreamReader(filePath, Encoding.UTF8))
         {
-            await connection.OpenAsync();
-            using (var transaction = await connection.BeginTransactionAsync())
+            while (!reader.EndOfStream)
             {
-                try
+                string line = reader.ReadLine();
+                if (line.Contains("�"))
                 {
-                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D2_Stage_Saldos_Contables;", connection, transaction);
-                    await truncateCommand.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Truncated table D2_Stage_Saldos_Contables.");
-
-                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
-                                          "INTO TABLE D2_Stage_Saldos_Contables " +
-                                          "FIELDS TERMINATED BY ',' " +
-                                          "ENCLOSED BY '\"' " +
-                                          "LINES TERMINATED BY '\\n' " +
-                                          "IGNORE 1 LINES;";
-                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
-                    await loadCommand.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Bulk inserted data into D2_Stage_Saldos_Contables.");
-
-                    await transaction.CommitAsync();
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"Error during bulk insert: {ex.Message}");
-                    _logger.LogError(ex, "Error during bulk insert.");
-                    throw;
+                    logBuilder.AppendLine($"Warning: Line contains invalid characters: {line}");
                 }
             }
         }
     }
 
+    // Convert file encoding to UTF-8 with BOM
+    private string ConvertToUTF8WithBOM(string filePath)
+    {
+        var newFilePath = Path.Combine(
+            Path.GetDirectoryName(filePath)!,
+            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
+        );
+
+        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
+        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+        {
+            while (!reader.EndOfStream)
+            {
+                writer.WriteLine(reader.ReadLine());
+            }
+        }
+
+        return newFilePath;
+    }
+
+    // Move files to historic folder
     private void D2_MoveFilesToHistoric(string filePath, StringBuilder logBuilder)
     {
         var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        var fileExtension = Path.GetExtension(filePath);
-        var newFileName = $"{fileName}_{timestamp}{fileExtension}";
-        var historicFilePath = Path.Combine(_historicFilePath, newFileName);
+        var historicFilePath = Path.Combine(_historicFilePath, $"{Path.GetFileNameWithoutExtension(filePath)}_{timestamp}{Path.GetExtension(filePath)}");
 
-        try
-        {
-            System.IO.File.Move(filePath, historicFilePath);
-            logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
-        }
-        catch (Exception ex)
-        {
-            logBuilder.AppendLine($"Error moving file to historic: {ex.Message}");
-            _logger.LogError(ex, "Error moving file to historic.");
-            throw;
-        }
+        System.IO.File.Move(filePath, historicFilePath);
+        logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
     }
 
+    // Write logs to a file
     private async Task D2_WriteLog(string logContent, string logPath)
     {
-        var logDirectory = Path.GetDirectoryName(logPath);
-        var historicDirectory = _historicFilePath;
-
-        var uniqueLogName = $"D2_Saldos_Contables_Bulk_{DateTime.Now:yyyy-MM-dd_HH-mm}.log";
-        var fullLogPath = Path.Combine(logDirectory!, uniqueLogName);
-
-        var existingLogs = Directory.GetFiles(logDirectory!, "D2_Saldos_Contables_Bulk*.log");
-        foreach (var existingLog in existingLogs)
-        {
-            var historicLogPath = Path.Combine(historicDirectory, Path.GetFileName(existingLog));
-            System.IO.File.Move(existingLog, historicLogPath);
-            _logger.LogInformation($"Moved existing log to historic: {historicLogPath}");
-        }
-
-        await System.IO.File.WriteAllTextAsync(fullLogPath, logContent);
-        _logger.LogInformation($"New log written to: {fullLogPath}");
+        await System.IO.File.WriteAllTextAsync(logPath, logContent);
+        _logger.LogInformation($"Log written to: {logPath}");
     }
 }

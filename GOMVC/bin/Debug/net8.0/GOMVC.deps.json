@@ -9,6 +9,7 @@
       "GOMVC/1.0.0": {
         "dependencies": {
           "ClosedXML": "0.104.2",
+          "CsvHelper": "33.0.1",
           "EPPlus": "7.5.0",
           "MailKit": "4.8.0",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "8.0.10",
@@ -89,6 +90,14 @@
           "lib/netstandard2.1/ClosedXML.Parser.dll": {
             "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "CsvHelper/33.0.1": {
+        "runtime": {
+          "lib/net8.0/CsvHelper.dll": {
+            "assemblyVersion": "33.0.0.0",
+            "fileVersion": "33.0.1.24"
           }
         }
       },
@@ -1499,6 +1508,13 @@
       "sha512": "sha512-w+/0tsxABS3lkSH8EUlA7IGme+mq5T/Puf3DbOiTckmSuUpAUO2LK29oXYByCcWkBv6wcRHxgWlQb1lxkwI0Tw==",
       "path": "closedxml.parser/1.2.0",
       "hashPath": "closedxml.parser.1.2.0.nupkg.sha512"
+    },
+    "CsvHelper/33.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-fev4lynklAU2A9GVMLtwarkwaanjSYB4wUqO2nOJX5hnzObORzUqVLe+bDYCUyIIRQM4o5Bsq3CcyJR89iMmEQ==",
+      "path": "csvhelper/33.0.1",
+      "hashPath": "csvhelper.33.0.1.nupkg.sha512"
     },
     "DocumentFormat.OpenXml/3.1.1": {
       "type": "package",

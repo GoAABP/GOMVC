@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "Ci/mgtZcU7s=",
+  "dgSpecHash": "4giJIL05ubc=",
   "success": true,
   "projectFilePath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
   "expectedPackageFiles": [
@@ -9,6 +9,7 @@
     "C:\\Users\\Go Credit\\.nuget\\packages\\bouncycastle.cryptography\\2.4.0\\bouncycastle.cryptography.2.4.0.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\closedxml\\0.104.2\\closedxml.0.104.2.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\closedxml.parser\\1.2.0\\closedxml.parser.1.2.0.nupkg.sha512",
+    "C:\\Users\\Go Credit\\.nuget\\packages\\csvhelper\\33.0.1\\csvhelper.33.0.1.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\documentformat.openxml\\3.1.1\\documentformat.openxml.3.1.1.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\documentformat.openxml.framework\\3.1.1\\documentformat.openxml.framework.3.1.1.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\epplus\\7.5.0\\epplus.7.5.0.nupkg.sha512",

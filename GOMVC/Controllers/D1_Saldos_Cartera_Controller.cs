@@ -7,6 +7,9 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using CsvHelper;
+using CsvHelper.Configuration;
+using System.Globalization;
 
 public class D1_Saldos_Cartera_Controller : Controller
 {
@@ -21,9 +24,11 @@ public class D1_Saldos_Cartera_Controller : Controller
         _logger = logger;
         _configuration = configuration;
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Handle special characters
     }
 
-    public async Task D1_ProcessSaldosCartera()
+    // Process current files
+    public async Task<IActionResult> D1_ProcessSaldosCartera()
     {
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadSaldosCartera.log";
         var logBuilder = new StringBuilder();
@@ -33,36 +38,50 @@ public class D1_Saldos_Cartera_Controller : Controller
         var files = Directory.GetFiles(_filePath, "SaldosCarteraXConvenio*.csv");
         if (files.Length == 0)
         {
-            var errorLog = "File not found.";
+            var errorLog = "No files matching 'SaldosCarteraXConvenio*.csv' found.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
             await D1_WriteLog(logBuilder.ToString(), logPath);
-            throw new FileNotFoundException(errorLog);
+            return NotFound(errorLog);
         }
 
-        var file = files[0];
-        logBuilder.AppendLine($"File found: {file}");
-
-        try
+        foreach (var file in files)
         {
-            await D1_BulkInsertSaldosCarteraData(file, logBuilder);
-            await D1_ExecuteSaldosCarteraInsert(logBuilder, logPath);
-            D1_MoveFilesToHistoric(file, logBuilder);
-        }
-        catch (Exception ex)
-        {
-            logBuilder.AppendLine($"Error: {ex.Message}");
-            _logger.LogError(ex, "Error during processing.");
-            await D1_WriteLog(logBuilder.ToString(), logPath);
-            throw;
+            logBuilder.AppendLine($"Processing file: {file}");
+
+            try
+            {
+                var convertedFilePath = ConvertToUTF8WithBOM(file);
+                logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
+
+                var sanitizedFilePath = PreprocessCsvFile(convertedFilePath, logBuilder);
+                logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
+
+                ValidateFile(sanitizedFilePath, logBuilder);
+
+                await D1_BulkInsertSaldosCarteraData(sanitizedFilePath, logBuilder);
+
+                await D1_ExecuteSaldosCarteraInsert(logBuilder, logPath);
+
+                D1_MoveFilesToHistoric(file, logBuilder);
+                D1_MoveFilesToHistoric(sanitizedFilePath, logBuilder);
+            }
+            catch (Exception ex)
+            {
+                logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
+                _logger.LogError(ex, $"Error processing file {file}.");
+            }
         }
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
-        _logger.LogInformation("Process completed successfully.");
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed.");
+        _logger.LogInformation("Process completed.");
         await D1_WriteLog(logBuilder.ToString(), logPath);
+
+        return Ok("Files processed successfully.");
     }
 
-    public async Task D1_ProcessHistoricSaldosCartera()
+    // Process historic files
+    public async Task<IActionResult> D1_ProcessHistoricSaldosCartera()
     {
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\BulkLoadHistoricSaldosCartera.log";
         var logBuilder = new StringBuilder();
@@ -72,11 +91,11 @@ public class D1_Saldos_Cartera_Controller : Controller
         var files = Directory.GetFiles(_filePath, "SaldosCarteraXConvenio_*.csv");
         if (files.Length == 0)
         {
-            var errorLog = "No historic files found.";
+            var errorLog = "No historic files matching 'SaldosCarteraXConvenio_*.csv' found.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
             await D1_WriteLog(logBuilder.ToString(), logPath);
-            throw new FileNotFoundException(errorLog);
+            return NotFound(errorLog);
         }
 
         foreach (var file in files)
@@ -112,9 +131,11 @@ public class D1_Saldos_Cartera_Controller : Controller
 
                 logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
 
-                await D1_BulkInsertSaldosCarteraData(file, logBuilder);
+                var sanitizedFilePath = PreprocessCsvFile(file, logBuilder);
+                await D1_BulkInsertSaldosCarteraData(sanitizedFilePath, logBuilder);
                 await D1_InsertHistoricSaldosCartera(fechaGenerado, logBuilder, logPath);
                 D1_MoveFilesToHistoric(file, logBuilder);
+                D1_MoveFilesToHistoric(sanitizedFilePath, logBuilder);
             }
             catch (Exception ex)
             {
@@ -126,8 +147,46 @@ public class D1_Saldos_Cartera_Controller : Controller
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process completed.");
         _logger.LogInformation("Historic process completed.");
         await D1_WriteLog(logBuilder.ToString(), logPath);
+
+        return Ok("Historic files processed successfully.");
     }
 
+    // Preprocess the CSV to fix malformed rows
+    private string PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
+    {
+        var sanitizedFilePath = Path.Combine(
+            Path.GetDirectoryName(inputFilePath)!,
+            Path.GetFileNameWithoutExtension(inputFilePath) + "_sanitized.csv"
+        );
+
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+        {
+            BadDataFound = null, // Ignore malformed rows
+            TrimOptions = TrimOptions.Trim, // Trim leading/trailing whitespace
+        };
+
+        try
+        {
+            using (var reader = new StreamReader(inputFilePath))
+            using (var csvReader = new CsvReader(reader, config))
+            using (var writer = new StreamWriter(sanitizedFilePath))
+            using (var csvWriter = new CsvWriter(writer, config))
+            {
+                var records = csvReader.GetRecords<dynamic>();
+                csvWriter.WriteRecords(records);
+            }
+            logBuilder.AppendLine($"Successfully sanitized file: {sanitizedFilePath}");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error sanitizing file: {ex.Message}");
+            throw;
+        }
+
+        return sanitizedFilePath;
+    }
+
+    // Bulk insert into staging table
     private async Task D1_BulkInsertSaldosCarteraData(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
@@ -164,49 +223,52 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
+    // Insert data from staging table to final table
     private async Task D1_ExecuteSaldosCarteraInsert(StringBuilder logBuilder, string logPath)
     {
         var sqlInsertCommand = @"
-        INSERT INTO D1_Saldos_Cartera (
-            Id_Solicitud, Id_Credito, Id_Persona, Referencia, Afiliado, Nombre, Monto, Comision, 
-            Intereses_Totales, Monto_Total, Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, 
-            IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
-            Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
-            Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
-            Id_Convenio, Dependencia, Primer_Pago_Teorico, Ultimo_Pago, Tipo_Financiamiento, 
-            Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, Sdo_Insoluto, 
-            Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, 
-            Sucursal, Fecha_Desembolso, Frecuencia, Primer_Pago_Real, Ultimo_Pago_c_ListaCobro, 
-            Ultimo_Pago_Aplicado, Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, 
-            Pago, Monto_Ultimo_Pago, Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, 
-            Com_Vigente, Com_Vencida, Clabe, Sig_Pago, Monto_Sig_Pago, vFondeador, Valida_Domi, 
-            vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, RFC, vMotiveExt, iPeriodsExt, 
-            vCommentExt, nRetencion, nJoPay, iMaxDays, vMaxDate, nLiquidate, nLiqPrin, nLiqInt, 
-            nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, nLiqChaTran, nLiqRetTran, 
-            vScoreBuro, vCollectStatus, nCAT, vOpTable, FechaGenerado
-        )
-        SELECT 
-            Id_Solicitud, Id_Credito, Id_Persona, Referencia, Afiliado, Nombre, Monto, Comision, 
-            Intereses_Totales, Monto_Total, Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, 
-            IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
-            Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
-            Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
-            Id_Convenio, Dependencia, STR_TO_DATE(NULLIF(Primer_Pago_Teorico, ''), '%d/%m/%Y'), 
-            STR_TO_DATE(NULLIF(Ultimo_Pago, ''), '%d/%m/%Y'), Tipo_Financiamiento, Capital_Vigente, 
-            Capital_Vencido, Intereses_Vencidos, Vencido, Sdo_Insoluto, Sdo_Total_c_ListasCobro, 
-            Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, Sucursal, 
-            STR_TO_DATE(NULLIF(Fecha_Desembolso, ''), '%d/%m/%Y'), Frecuencia, 
-            STR_TO_DATE(NULLIF(Primer_Pago_Real, ''), '%d/%m/%Y'), 
-            STR_TO_DATE(NULLIF(Ultimo_Pago_c_ListaCobro, ''), '%d/%m/%Y'), 
-            STR_TO_DATE(NULLIF(Ultimo_Pago_Aplicado, ''), '%d/%m/%Y'), 
-            Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, Pago, Monto_Ultimo_Pago, 
-            Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, Com_Vigente, Com_Vencida, Clabe, 
-            STR_TO_DATE(NULLIF(Sig_Pago, ''), '%d/%m/%Y'), Monto_Sig_Pago, vFondeador, Valida_Domi, 
-            vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, RFC, vMotiveExt, iPeriodsExt, vCommentExt, 
-            nRetencion, nJoPay, iMaxDays, STR_TO_DATE(NULLIF(vMaxDate, ''), '%d/%m/%Y'), nLiquidate, 
-            nLiqPrin, nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, nLiqChaTran, 
-            nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, NOW() AS FechaGenerado
-        FROM D1_Stage_Saldos_Cartera;";
+            INSERT INTO D1_Saldos_Cartera (
+                Id_Solicitud, Id_Credito, Id_Persona, Referencia, Afiliado, Nombre, Monto, Comision, 
+                Intereses_Totales, Monto_Total, Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, 
+                IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
+                Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
+                Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
+                Id_Convenio, Dependencia, Primer_Pago_Teorico, Ultimo_Pago, Tipo_Financiamiento, 
+                Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, Sdo_Insoluto, 
+                Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, 
+                Sucursal, Fecha_Desembolso, Frecuencia, Primer_Pago_Real, Ultimo_Pago_c_ListaCobro, 
+                Ultimo_Pago_Aplicado, Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, 
+                Pago, Monto_Ultimo_Pago, Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, 
+                Com_Vigente, Com_Vencida, Clabe, Sig_Pago, Monto_Sig_Pago, vFondeador, Valida_Domi, 
+                vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, RFC, vMotiveExt, iPeriodsExt, vCommentExt, 
+                nRetencion, nJoPay, iMaxDays, vMaxDate, nLiquidate, nLiqPrin, nLiqInt, nLiqMor, 
+                nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, nLiqChaTran, nLiqRetTran, 
+                vScoreBuro, vCollectStatus, nCAT, vOpTable, FechaGenerado
+            )
+            SELECT 
+                Id_Solicitud, Id_Credito, Id_Persona, Referencia, Afiliado, Nombre, Monto, Comision, 
+                Intereses_Totales, Monto_Total, Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, 
+                IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
+                Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
+                Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
+                Id_Convenio, Dependencia, 
+                STR_TO_DATE(NULLIF(Primer_Pago_Teorico, ''), '%d/%m/%Y') AS Primer_Pago_Teorico,
+                STR_TO_DATE(NULLIF(Ultimo_Pago, ''), '%d/%m/%Y') AS Ultimo_Pago,
+                Tipo_Financiamiento, Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, 
+                Sdo_Insoluto, Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, 
+                Estatus, Sucursal, STR_TO_DATE(NULLIF(Fecha_Desembolso, ''), '%d/%m/%Y') AS Fecha_Desembolso,
+                Frecuencia, STR_TO_DATE(NULLIF(Primer_Pago_Real, ''), '%d/%m/%Y') AS Primer_Pago_Real,
+                STR_TO_DATE(NULLIF(Ultimo_Pago_c_ListaCobro, ''), '%d/%m/%Y') AS Ultimo_Pago_c_ListaCobro,
+                STR_TO_DATE(NULLIF(Ultimo_Pago_Aplicado, ''), '%d/%m/%Y') AS Ultimo_Pago_Aplicado,
+                Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, Pago, 
+                Monto_Ultimo_Pago, Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, 
+                Com_Vigente, Com_Vencida, Clabe, STR_TO_DATE(NULLIF(Sig_Pago, ''), '%d/%m/%Y') AS Sig_Pago,
+                Monto_Sig_Pago, vFondeador, Valida_Domi, vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm,
+                RFC, vMotiveExt, iPeriodsExt, vCommentExt, nRetencion, nJoPay, iMaxDays, 
+                STR_TO_DATE(NULLIF(vMaxDate, ''), '%d/%m/%Y') AS vMaxDate, nLiquidate, nLiqPrin, 
+                nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, 
+                nLiqChaTran, nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, NOW() AS FechaGenerado
+            FROM D1_Stage_Saldos_Cartera;";
 
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -217,7 +279,8 @@ public class D1_Saldos_Cartera_Controller : Controller
                 {
                     var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
                     await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Inserted data successfully.");
+                    logBuilder.AppendLine("Inserted data successfully into D1_Saldos_Cartera.");
+                    _logger.LogInformation("Inserted data successfully into D1_Saldos_Cartera.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
@@ -231,6 +294,7 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
+    // Insert historic data into final table
     private async Task D1_InsertHistoricSaldosCartera(DateTime fechaGenerado, StringBuilder logBuilder, string logPath)
     {
         var sqlInsertCommand = @"
@@ -258,21 +322,23 @@ public class D1_Saldos_Cartera_Controller : Controller
                 IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
                 Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
                 Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
-                Id_Convenio, Dependencia, STR_TO_DATE(NULLIF(Primer_Pago_Teorico, ''), '%d/%m/%Y'), 
-                STR_TO_DATE(NULLIF(Ultimo_Pago, ''), '%d/%m/%Y'), Tipo_Financiamiento, Capital_Vigente, 
-                Capital_Vencido, Intereses_Vencidos, Vencido, Sdo_Insoluto, Sdo_Total_c_ListasCobro, 
-                Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, Sucursal, 
-                STR_TO_DATE(NULLIF(Fecha_Desembolso, ''), '%d/%m/%Y'), Frecuencia, 
-                STR_TO_DATE(NULLIF(Primer_Pago_Real, ''), '%d/%m/%Y'), 
-                STR_TO_DATE(NULLIF(Ultimo_Pago_c_ListaCobro, ''), '%d/%m/%Y'), 
-                STR_TO_DATE(NULLIF(Ultimo_Pago_Aplicado, ''), '%d/%m/%Y'), 
-                Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, Pago, Monto_Ultimo_Pago, 
-                Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, Com_Vigente, Com_Vencida, Clabe, 
-                STR_TO_DATE(NULLIF(Sig_Pago, ''), '%d/%m/%Y'), Monto_Sig_Pago, vFondeador, Valida_Domi, 
-                vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, RFC, vMotiveExt, iPeriodsExt, vCommentExt, 
-                nRetencion, nJoPay, iMaxDays, STR_TO_DATE(NULLIF(vMaxDate, ''), '%d/%m/%Y'), nLiquidate, 
-                nLiqPrin, nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, nLiqChaTran, 
-                nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, @FechaGenerado
+                Id_Convenio, Dependencia, 
+                STR_TO_DATE(NULLIF(Primer_Pago_Teorico, ''), '%d/%m/%Y') AS Primer_Pago_Teorico,
+                STR_TO_DATE(NULLIF(Ultimo_Pago, ''), '%d/%m/%Y') AS Ultimo_Pago,
+                Tipo_Financiamiento, Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, 
+                Sdo_Insoluto, Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, 
+                Estatus, Sucursal, STR_TO_DATE(NULLIF(Fecha_Desembolso, ''), '%d/%m/%Y') AS Fecha_Desembolso,
+                Frecuencia, STR_TO_DATE(NULLIF(Primer_Pago_Real, ''), '%d/%m/%Y') AS Primer_Pago_Real,
+                STR_TO_DATE(NULLIF(Ultimo_Pago_c_ListaCobro, ''), '%d/%m/%Y') AS Ultimo_Pago_c_ListaCobro,
+                STR_TO_DATE(NULLIF(Ultimo_Pago_Aplicado, ''), '%d/%m/%Y') AS Ultimo_Pago_Aplicado,
+                Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, Pago, 
+                Monto_Ultimo_Pago, Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, 
+                Com_Vigente, Com_Vencida, Clabe, STR_TO_DATE(NULLIF(Sig_Pago, ''), '%d/%m/%Y') AS Sig_Pago,
+                Monto_Sig_Pago, vFondeador, Valida_Domi, vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm,
+                RFC, vMotiveExt, iPeriodsExt, vCommentExt, nRetencion, nJoPay, iMaxDays, 
+                STR_TO_DATE(NULLIF(vMaxDate, ''), '%d/%m/%Y') AS vMaxDate, nLiquidate, nLiqPrin, 
+                nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, 
+                nLiqChaTran, nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, @FechaGenerado
             FROM D1_Stage_Saldos_Cartera;";
 
         using (var connection = new MySqlConnection(_connectionString))
@@ -300,47 +366,56 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
-    private void D1_MoveFilesToHistoric(string filePath, StringBuilder logBuilder)
+    // Validate file for invalid characters
+    private void ValidateFile(string filePath, StringBuilder logBuilder)
     {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        var fileExtension = Path.GetExtension(filePath);
-        var newFileName = $"{fileName}_{timestamp}{fileExtension}";
-        var historicFilePath = Path.Combine(_historicFilePath, newFileName);
-
-        try
+        using (var reader = new StreamReader(filePath, Encoding.UTF8))
         {
-            System.IO.File.Move(filePath, historicFilePath);
-            logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
-        }
-        catch (Exception ex)
-        {
-            logBuilder.AppendLine($"Error moving file to historic: {ex.Message}");
-            _logger.LogError(ex, "Error moving file to historic.");
-            throw;
+            while (!reader.EndOfStream)
+            {
+                string line = reader.ReadLine();
+                if (line.Contains("�"))
+                {
+                    logBuilder.AppendLine($"Warning: Line contains invalid characters: {line}");
+                }
+            }
         }
     }
 
-    private async Task D1_WriteLog(string logContent, string logPath)
+    // Convert file to UTF-8 with BOM
+    private string ConvertToUTF8WithBOM(string filePath)
     {
-        var logDirectory = Path.GetDirectoryName(logPath);
-        var historicDirectory = _historicFilePath;
+        var newFilePath = Path.Combine(
+            Path.GetDirectoryName(filePath)!,
+            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
+        );
 
-        // Generate a unique log file name based on the current timestamp
-        var uniqueLogName = $"D1_Saldos_Cartera_Bulk_{DateTime.Now:yyyy-MM-dd_HH-mm}.log";
-        var fullLogPath = Path.Combine(logDirectory!, uniqueLogName);
-
-        // Check for any existing log files starting with "D1_Saldos_Cartera_Bulk"
-        var existingLogs = Directory.GetFiles(logDirectory!, "D1_Saldos_Cartera_Bulk*.log");
-        foreach (var existingLog in existingLogs)
+        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
+        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
         {
-            var historicLogPath = Path.Combine(historicDirectory, Path.GetFileName(existingLog));
-            System.IO.File.Move(existingLog, historicLogPath);
-            _logger.LogInformation($"Moved existing log to historic: {historicLogPath}");
+            while (!reader.EndOfStream)
+            {
+                writer.WriteLine(reader.ReadLine());
+            }
         }
 
-        // Write the new log content to the unique log file
-        await System.IO.File.WriteAllTextAsync(fullLogPath, logContent);
-        _logger.LogInformation($"New log written to: {fullLogPath}");
+        return newFilePath;
+    }
+
+    // Move processed files to historic folder
+    private void D1_MoveFilesToHistoric(string filePath, StringBuilder logBuilder)
+    {
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+        var historicFilePath = Path.Combine(_historicFilePath, $"{Path.GetFileNameWithoutExtension(filePath)}_{timestamp}{Path.GetExtension(filePath)}");
+
+        System.IO.File.Move(filePath, historicFilePath);
+        logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
+    }
+
+    // Write logs to file
+    private async Task D1_WriteLog(string logContent, string logPath)
+    {
+        await System.IO.File.WriteAllTextAsync(logPath, logContent);
+        _logger.LogInformation($"Log written to: {logPath}");
     }
 }
