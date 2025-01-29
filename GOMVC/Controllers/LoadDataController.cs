@@ -38,7 +38,9 @@ public class LoadDataController : Controller
         var activities = new List<string>
         {
             "D1_Saldos_Cartera",
+            "D1B_Saldos_Cartera",
             "D2-Saldos_Contables",
+            "D2B-Saldos_Contables",
             "D3_Aplicacion_Pagos",
             "D4_Otorgamiento_Creditos",
             "D5_Gestiones",
@@ -72,11 +74,25 @@ public class LoadDataController : Controller
                     result = await saldosCarteraController.D1_ProcessSaldosCartera();
                     break;
 
+                case "d1b_saldos_cartera":
+                    var saldosCarteraControllerb = new D1_Saldos_Cartera_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D1_Saldos_Cartera_Controller>>(),
+                        _configuration);
+                    result = await saldosCarteraControllerb.D1_ProcessHistoricSaldosCartera();
+                    break;    
+
                 case "d2-saldos_contables":
                     var saldosContablesController = new D2_Saldos_Contables_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
                         _configuration);
                     result = await saldosContablesController.D2_ProcessSaldosContables();
+                    break;
+
+                    case "d2b-saldos_contables":
+                    var saldosContablesControllerb = new D2_Saldos_Contables_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
+                        _configuration);
+                    result = await saldosContablesControllerb.D2_ProcessHistoricSaldosContables();
                     break;
 
                 case "d3_aplicacion_pagos":
@@ -97,7 +113,7 @@ public class LoadDataController : Controller
                     var gestionesController = new D5_Gestiones_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D5_Gestiones_Controller>>(),
                         _configuration);
-                    result = await gestionesController.D5_ProcessFile();
+                    result = await gestionesController.D5_ProcessGestiones();
                     break;
 
                 case "d6_quebrantos":

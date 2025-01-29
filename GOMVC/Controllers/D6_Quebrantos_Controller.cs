@@ -7,9 +7,6 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using CsvHelper;
-using CsvHelper.Configuration;
-using System.Globalization;
 
 public class D6_Quebrantos_Controller : Controller
 {
@@ -27,13 +24,13 @@ public class D6_Quebrantos_Controller : Controller
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Handle special characters
     }
 
-    // Process current files
+    [HttpPost]
     public async Task<IActionResult> D6_ProcessQuebrantos()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Quebrantos_Bulk.log";
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Quebrantos.log";
         var logBuilder = new StringBuilder();
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
-        _logger.LogInformation("Process started.");
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D6 process started.");
+        _logger.LogInformation("D6 process started.");
 
         var files = Directory.GetFiles(_filePath, "Quebrantos datos Cobranza_*.csv");
         if (files.Length == 0)
@@ -45,106 +42,93 @@ public class D6_Quebrantos_Controller : Controller
             return NotFound(errorLog);
         }
 
+        var archiveFolder = Path.Combine(_historicFilePath, "Archive");
+        var processedFolder = Path.Combine(_historicFilePath, "Processed");
+        var errorFolder = Path.Combine(_historicFilePath, "Error");
+
         foreach (var file in files)
         {
             logBuilder.AppendLine($"Processing file: {file}");
-
             try
             {
-                var convertedFilePath = ConvertToUTF8WithBOM(file);
+                var convertedFilePath = D6_ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                var sanitizedFilePath = PreprocessCsvFile(convertedFilePath, logBuilder);
+                var sanitizedFilePath = D6_PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
-                ValidateFile(sanitizedFilePath, logBuilder);
+                await D6_BulkInsertToStage(sanitizedFilePath, logBuilder);
+                await D6_InsertToFinalTable(logBuilder);
 
-                await D6_BulkInsertQuebrantosData(sanitizedFilePath, logBuilder);
-
-                await D6_ExecuteQuebrantosInsert(logBuilder, logPath);
-
-                D6_MoveFilesToHistoric(file, logBuilder);
-                D6_MoveFilesToHistoric(sanitizedFilePath, logBuilder);
+                D6_MoveFile(file, archiveFolder, logBuilder);
+                D6_MoveFile(convertedFilePath, processedFolder, logBuilder);
+                D6_MoveFile(sanitizedFilePath, processedFolder, logBuilder);
             }
             catch (Exception ex)
             {
                 logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
-                _logger.LogError(ex, $"Error processing file {file}.");
+                _logger.LogError(ex, $"Error processing file {file}");
+                D6_MoveFile(file, errorFolder, logBuilder);
             }
         }
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed.");
-        _logger.LogInformation("Process completed.");
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D6 process completed.");
+        _logger.LogInformation("D6 process completed.");
         await D6_WriteLog(logBuilder.ToString(), logPath);
 
-        return Ok("Files processed successfully.");
+        D6_MoveLogToHistoric(logPath, Path.Combine(_historicFilePath, "Logs"));
+        return Ok("D6 files processed successfully.");
     }
 
-    // Process historic files
-    public async Task<IActionResult> D6_ProcessHistoricQuebrantos()
+    private string D6_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Quebrantos_Historic.log";
-        var logBuilder = new StringBuilder();
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process started.");
-        _logger.LogInformation("Historic process started.");
+        var sanitizedFilePath = Path.Combine(
+            Path.GetDirectoryName(inputFilePath)!,
+            Path.GetFileNameWithoutExtension(inputFilePath) + "_sanitized.csv"
+        );
 
-        var files = Directory.GetFiles(_filePath, "Quebrantos datos Cobranza_*.csv");
-        if (files.Length == 0)
+        try
         {
-            var errorLog = "No historic files matching 'Quebrantos datos Cobranza_*.csv' found.";
-            logBuilder.AppendLine(errorLog);
-            _logger.LogError(errorLog);
-            await D6_WriteLog(logBuilder.ToString(), logPath);
-            return NotFound(errorLog);
-        }
-
-        foreach (var file in files)
-        {
-            logBuilder.AppendLine($"Processing file: {file}");
-
-            try
+            using (var reader = new StreamReader(inputFilePath))
+            using (var writer = new StreamWriter(sanitizedFilePath))
             {
-                var fileName = Path.GetFileNameWithoutExtension(file);
-                var match = Regex.Match(fileName, @"Quebrantos datos Cobranza_(\d{2})(\d{2})(\d{4})");
+                string? line;
+                bool headerProcessed = false;
 
-                if (!match.Success)
+                while ((line = reader.ReadLine()) != null)
                 {
-                    var errorLog = $"Invalid file name format: {fileName}";
-                    logBuilder.AppendLine(errorLog);
-                    _logger.LogError(errorLog);
-                    continue;
+                    if (!headerProcessed)
+                    {
+                        writer.WriteLine(line); // Write the header row as-is
+                        headerProcessed = true;
+                        continue;
+                    }
+
+                    var columns = line.Split(',');
+
+                    // Stop processing if the stopper is found in the first column
+                    if (columns[0].Trim() == "999999999")
+                    {
+                        logBuilder.AppendLine("Stopper '999999999' found in the first column. Stopping further processing.");
+                        break;
+                    }
+
+                    writer.WriteLine(line);
                 }
-
-                var day = int.Parse(match.Groups[1].Value);
-                var month = int.Parse(match.Groups[2].Value);
-                var year = int.Parse(match.Groups[3].Value);
-                var fechaGenerado = new DateTime(year, month, day);
-
-                logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
-
-                var sanitizedFilePath = PreprocessCsvFile(file, logBuilder);
-                await D6_BulkInsertQuebrantosData(sanitizedFilePath, logBuilder);
-                await D6_InsertHistoricQuebrantos(fechaGenerado, logBuilder, logPath);
-
-                D6_MoveFilesToHistoric(file, logBuilder);
-                D6_MoveFilesToHistoric(sanitizedFilePath, logBuilder);
             }
-            catch (Exception ex)
-            {
-                logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
-                _logger.LogError(ex, $"Error processing file {file}.");
-            }
+
+            logBuilder.AppendLine($"File sanitized successfully: {sanitizedFilePath}");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error during file sanitization: {ex.Message}");
+            throw;
         }
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process completed.");
-        _logger.LogInformation("Historic process completed.");
-        await D6_WriteLog(logBuilder.ToString(), logPath);
-
-        return Ok("Historic files processed successfully.");
+        return sanitizedFilePath;
     }
 
-    // Bulk insert into staging table
-    private async Task D6_BulkInsertQuebrantosData(string csvFilePath, StringBuilder logBuilder)
+    private async Task D6_BulkInsertToStage(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -153,16 +137,19 @@ public class D6_Quebrantos_Controller : Controller
             {
                 try
                 {
+                    // Truncate the staging table
                     var truncateCommand = new MySqlCommand("TRUNCATE TABLE D6_Stage_Quebrantos;", connection, transaction);
                     await truncateCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Truncated table D6_Stage_Quebrantos.");
 
+                    // Bulk insert into staging table
                     var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
-                                          "INTO TABLE D6_Stage_Quebrantos " +
-                                          "FIELDS TERMINATED BY ',' " +
-                                          "ENCLOSED BY '\"' " +
-                                          "LINES TERMINATED BY '\\n' " +
-                                          "IGNORE 1 LINES;";
+                                        "INTO TABLE D6_Stage_Quebrantos " +
+                                        "FIELDS TERMINATED BY ',' " +
+                                        "ENCLOSED BY '\"' " +
+                                        "LINES TERMINATED BY '\\n' " +
+                                        "IGNORE 1 LINES;";
+
                     var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
                     await loadCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Bulk inserted data into D6_Stage_Quebrantos.");
@@ -180,8 +167,7 @@ public class D6_Quebrantos_Controller : Controller
         }
     }
 
-    // Insert data from staging table to final table
-    private async Task D6_ExecuteQuebrantosInsert(StringBuilder logBuilder, string logPath)
+    private async Task D6_InsertToFinalTable(StringBuilder logBuilder)
     {
         var sqlInsertCommand = @"
             INSERT INTO D6_Quebrantos (
@@ -209,9 +195,9 @@ public class D6_Quebrantos_Controller : Controller
                 try
                 {
                     var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
-                    await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Inserted data successfully into D6_Quebrantos.");
-                    _logger.LogInformation("Inserted data successfully into D6_Quebrantos.");
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+
+                    logBuilder.AppendLine($"Inserted {rowsAffected} rows into D6_Quebrantos.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
@@ -225,7 +211,157 @@ public class D6_Quebrantos_Controller : Controller
         }
     }
 
-    private async Task D6_InsertHistoricQuebrantos(DateTime fechaGenerado, StringBuilder logBuilder, string logPath)
+    private void D6_MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder)
+    {
+        try
+        {
+            if (!Directory.Exists(destinationFolder))
+            {
+                Directory.CreateDirectory(destinationFolder);
+            }
+
+            var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
+            if (System.IO.File.Exists(destinationFilePath))
+            {
+                System.IO.File.Delete(destinationFilePath); // Overwrite existing file
+            }
+
+            System.IO.File.Move(sourceFilePath, destinationFilePath);
+            logBuilder.AppendLine($"Moved file: {sourceFilePath} -> {destinationFilePath}");
+            _logger.LogInformation($"Moved file: {sourceFilePath} -> {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error moving file {sourceFilePath} to {destinationFolder}: {ex.Message}");
+            _logger.LogError(ex, $"Error moving file {sourceFilePath} to {destinationFolder}");
+        }
+    }
+
+    private async Task D6_WriteLog(string content, string logPath)
+    {
+        try
+        {
+            if (!Directory.Exists(Path.GetDirectoryName(logPath)))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+            }
+
+            await System.IO.File.WriteAllTextAsync(logPath, content);
+            _logger.LogInformation($"Log written to: {logPath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error writing log to {logPath}");
+            throw;
+        }
+    }
+
+    private void D6_MoveLogToHistoric(string logPath, string historicLogsFolder)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(logPath))
+            {
+                _logger.LogWarning($"Log file does not exist: {logPath}");
+                return;
+            }
+
+            if (!Directory.Exists(historicLogsFolder))
+            {
+                Directory.CreateDirectory(historicLogsFolder);
+            }
+
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
+            var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
+
+            System.IO.File.Move(logPath, destinationFilePath);
+            _logger.LogInformation($"Log file moved to historic folder: {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error moving log file to historic folder: {ex.Message}");
+            throw;
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> D6_ProcessHistoricQuebrantos()
+    {
+        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Historic_Quebrantos.log";
+        var logBuilder = new StringBuilder();
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process started.");
+        _logger.LogInformation("Historic process started.");
+
+        var files = Directory.GetFiles(_filePath, "Quebrantos datos Cobranza_*.csv");
+        if (files.Length == 0)
+        {
+            var errorLog = "No historic files matching 'Quebrantos datos Cobranza_*.csv' found.";
+            logBuilder.AppendLine(errorLog);
+            _logger.LogError(errorLog);
+            await D6_WriteLog(logBuilder.ToString(), logPath);
+            return NotFound(errorLog);
+        }
+
+        var archiveFolder = Path.Combine(_historicFilePath, "Archive");
+        var processedFolder = Path.Combine(_historicFilePath, "Processed");
+        var errorFolder = Path.Combine(_historicFilePath, "Error");
+
+        foreach (var file in files)
+        {
+            logBuilder.AppendLine($"Processing file: {file}");
+
+            try
+            {
+                var fileName = Path.GetFileNameWithoutExtension(file);
+                var match = Regex.Match(fileName, @"Quebrantos datos Cobranza_(\d{2})(\d{2})(\d{4})");
+
+                if (!match.Success)
+                {
+                    var errorLog = $"Invalid file name format: {fileName}";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(errorLog);
+                    D6_MoveFile(file, errorFolder, logBuilder);
+                    continue;
+                }
+
+                var day = int.Parse(match.Groups[1].Value);
+                var month = int.Parse(match.Groups[2].Value);
+                var year = int.Parse(match.Groups[3].Value);
+                var fechaGenerado = new DateTime(year, month, day);
+
+                logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
+
+                var convertedFilePath = D6_ConvertToUTF8WithBOM(file);
+                logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
+
+                var sanitizedFilePath = D6_PreprocessCsvFile(convertedFilePath, logBuilder);
+                logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
+
+                await D6_BulkInsertToStage(sanitizedFilePath, logBuilder);
+                await D6_InsertHistoricData(fechaGenerado, logBuilder);
+
+                D6_MoveFile(file, archiveFolder, logBuilder);
+                D6_MoveFile(convertedFilePath, processedFolder, logBuilder);
+                D6_MoveFile(sanitizedFilePath, processedFolder, logBuilder);
+            }
+            catch (Exception ex)
+            {
+                logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
+                _logger.LogError(ex, $"Error processing file {file}");
+                D6_MoveFile(file, errorFolder, logBuilder);
+            }
+        }
+
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process completed.");
+        _logger.LogInformation("Historic process completed.");
+        await D6_WriteLog(logBuilder.ToString(), logPath);
+
+        D6_MoveLogToHistoric(logPath, Path.Combine(_historicFilePath, "Logs"));
+        return Ok("Historic files processed successfully.");
+    }
+
+    private async Task D6_InsertHistoricData(DateTime fechaGenerado, StringBuilder logBuilder)
     {
         var sqlInsertCommand = @"
             INSERT INTO D6_Quebrantos (
@@ -254,9 +390,9 @@ public class D6_Quebrantos_Controller : Controller
                 {
                     var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
                     command.Parameters.AddWithValue("@FechaGenerado", fechaGenerado);
-                    await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Inserted historic data successfully into D6_Quebrantos.");
-                    _logger.LogInformation("Inserted historic data successfully into D6_Quebrantos.");
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+
+                    logBuilder.AppendLine($"Inserted {rowsAffected} rows into D6_Quebrantos.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
@@ -270,8 +406,7 @@ public class D6_Quebrantos_Controller : Controller
         }
     }
 
-    // Validate the file for invalid characters or errors
-    private void ValidateFile(string filePath, StringBuilder logBuilder)
+    private void D6_ValidateFile(string filePath, StringBuilder logBuilder)
     {
         try
         {
@@ -280,16 +415,26 @@ public class D6_Quebrantos_Controller : Controller
                 int lineNumber = 0;
                 while (!reader.EndOfStream)
                 {
-                    string line = reader.ReadLine();
+                    string? line = reader.ReadLine();
                     lineNumber++;
 
-                    // Check for invalid characters
-                    if (line.Contains("�"))
+                    if (string.IsNullOrWhiteSpace(line))
                     {
-                        logBuilder.AppendLine($"Warning: Invalid character found on line {lineNumber}: {line}");
+                        logBuilder.AppendLine($"Warning: Empty line found at line {lineNumber}.");
+                        continue;
                     }
 
-                    // Add any other validations as needed
+                    if (line.Contains("�"))
+                    {
+                        logBuilder.AppendLine($"Warning: Invalid character found at line {lineNumber}: {line}");
+                    }
+
+                    var columns = line.Split(',');
+                    if (columns.Length < 10) // Example: Check for at least 10 columns
+                    {
+                        logBuilder.AppendLine($"Error: Insufficient columns at line {lineNumber}: {line}");
+                        throw new InvalidDataException($"Invalid data structure in file: {filePath}");
+                    }
                 }
             }
 
@@ -302,90 +447,40 @@ public class D6_Quebrantos_Controller : Controller
         }
     }
 
-    // File conversion to UTF-8
-    private string ConvertToUTF8WithBOM(string filePath)
+    private void D6_LogStep(string message, StringBuilder logBuilder)
+    {
+        var timestampedMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}";
+        logBuilder.AppendLine(timestampedMessage);
+        _logger.LogInformation(timestampedMessage);
+    }
+
+    private string D6_ConvertToUTF8WithBOM(string filePath)
     {
         var newFilePath = Path.Combine(
             Path.GetDirectoryName(filePath)!,
             Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
         );
 
-        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
-        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+        try
         {
-            while (!reader.EndOfStream)
+            using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
+            using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
             {
-                writer.WriteLine(reader.ReadLine());
+                while (!reader.EndOfStream)
+                {
+                    writer.WriteLine(reader.ReadLine());
+                }
             }
+
+            _logger.LogInformation($"File successfully converted to UTF-8 with BOM: {newFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error converting file to UTF-8 with BOM: {filePath}");
+            throw;
         }
 
         return newFilePath;
     }
 
-    // Preprocessing CSV files
-    private string PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
-    {
-        var sanitizedFilePath = Path.Combine(
-            Path.GetDirectoryName(inputFilePath)!,
-            Path.GetFileNameWithoutExtension(inputFilePath) + "_sanitized.csv"
-        );
-
-        try
-        {
-            using (var reader = new StreamReader(inputFilePath))
-            using (var writer = new StreamWriter(sanitizedFilePath))
-            {
-                string? line;
-                bool headerProcessed = false;
-
-                while ((line = reader.ReadLine()) != null)
-                {
-                    // Handle header row separately
-                    if (!headerProcessed)
-                    {
-                        writer.WriteLine(line); // Write header as-is
-                        headerProcessed = true;
-                        continue;
-                    }
-
-                    // Split the line to check the first column
-                    var columns = line.Split(',');
-
-                    // Check if the first column equals '999999999'
-                    if (columns[0].Trim() == "999999999")
-                    {
-                        logBuilder.AppendLine("Delimiter '999999999' found. Stopping further processing.");
-                        break; // Stop processing further rows
-                    }
-
-                    // Write valid rows to the sanitized file
-                    writer.WriteLine(line);
-                }
-            }
-
-            logBuilder.AppendLine($"File successfully sanitized and saved to: {sanitizedFilePath}");
-        }
-        catch (Exception ex)
-        {
-            logBuilder.AppendLine($"Error during preprocessing: {ex.Message}");
-            throw;
-        }
-
-        return sanitizedFilePath;
-    }
-
-    private void D6_MoveFilesToHistoric(string filePath, StringBuilder logBuilder)
-    {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var historicFilePath = Path.Combine(_historicFilePath, $"{Path.GetFileNameWithoutExtension(filePath)}_{timestamp}{Path.GetExtension(filePath)}");
-
-        System.IO.File.Move(filePath, historicFilePath);
-        logBuilder.AppendLine($"Moved file to historic: {historicFilePath}");
-    }
-
-    private async Task D6_WriteLog(string logContent, string logPath)
-    {
-        await System.IO.File.WriteAllTextAsync(logPath, logContent);
-        _logger.LogInformation($"Log written to: {logPath}");
-    }
 }

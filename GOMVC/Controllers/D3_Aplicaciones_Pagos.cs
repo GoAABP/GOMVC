@@ -25,55 +25,74 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
     public async Task<IActionResult> D3_ProcessAplicacionPagos()
     {
         var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D3_Aplicaciones_Pagos.log";
+        var archiveFolder = @"C:\Users\Go Credit\Documents\DATA\ARCHIVE";
+        var processedFolder = @"C:\Users\Go Credit\Documents\DATA\PROCESSED";
+        var errorFolder = @"C:\Users\Go Credit\Documents\DATA\ERROR";
         var logBuilder = new StringBuilder();
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
-        _logger.LogInformation("Process started.");
+        var hasErrors = false;
 
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D3 process started.");
+        _logger.LogInformation("D3 process started.");
+
+        // Get relevant files
         var files = Directory.GetFiles(_filePath, "Aplicacion de pagos por fecha de Aplica*.csv");
         if (files.Length == 0)
         {
-            var errorLog = "No files found.";
+            var errorLog = "No files found matching the pattern.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
-            await WriteLog(logBuilder.ToString(), logPath);
+            await D3_WriteLog(logBuilder.ToString(), logPath);
             return NotFound(errorLog);
         }
 
         foreach (var file in files)
         {
             logBuilder.AppendLine($"Processing file: {file}");
-
             try
             {
-                // Convert to UTF-8 with BOM
-                var convertedFilePath = ConvertToUTF8WithBOM(file);
+                // File Conversion to UTF-8 with BOM
+                var convertedFilePath = D3_ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                // Preprocess file and apply stopper logic
-                var sanitizedFilePath = PreprocessCsvFile(convertedFilePath, logBuilder);
+                // Preprocessing: Stopper and sanitization
+                var sanitizedFilePath = D3_PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
-                // Bulk load data and execute insert with validation
+                // Load data into staging table
                 await D3_LoadDataToStage(sanitizedFilePath, logBuilder);
+
+                // Insert validated data into the final table
                 await D3_InsertValidatedData(logBuilder);
+
+                // Move files to the archive and processed folders
+                D3_MoveFile(file, archiveFolder);
+                D3_MoveFile(convertedFilePath, processedFolder);
+                D3_MoveFile(sanitizedFilePath, processedFolder);
+
+                logBuilder.AppendLine($"File {file} processed successfully.");
             }
             catch (Exception ex)
             {
                 logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
                 _logger.LogError(ex, $"Error processing file {file}");
-                await WriteLog(logBuilder.ToString(), logPath);
-                return StatusCode(500, "Error during processing.");
+                hasErrors = true;
+
+                // Move problematic files to error folder
+                D3_MoveFile(file, errorFolder);
             }
         }
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
-        _logger.LogInformation("Process completed successfully.");
-        await WriteLog(logBuilder.ToString(), logPath);
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D3 process completed.");
+        _logger.LogInformation("D3 process completed.");
+        await D3_WriteLog(logBuilder.ToString(), logPath);
 
-        return Ok("Files processed successfully.");
+        // Finalize response based on errors
+        return hasErrors
+            ? StatusCode(500, "D3 process completed with errors. Check the log for details.")
+            : Ok("D3 process completed successfully.");
     }
 
-    private string PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
+    private string D3_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
     {
         var sanitizedFilePath = Path.Combine(
             Path.GetDirectoryName(inputFilePath)!,
@@ -98,7 +117,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                         continue;
                     }
 
-                    // Split the line and check for stopper
+                    // Check for stopper in the first column
                     var columns = line.Split(',');
                     if (columns[0].Trim() == "0")
                     {
@@ -121,6 +140,25 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         return sanitizedFilePath;
     }
 
+    private string D3_ConvertToUTF8WithBOM(string filePath)
+    {
+        var newFilePath = Path.Combine(
+            Path.GetDirectoryName(filePath)!,
+            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
+        );
+
+        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
+        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+        {
+            while (!reader.EndOfStream)
+            {
+                writer.WriteLine(reader.ReadLine());
+            }
+        }
+
+        return newFilePath;
+    }
+
     private async Task D3_LoadDataToStage(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
@@ -136,8 +174,8 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                     logBuilder.AppendLine("Truncated table D3_Stage_Aplicacion_Pagos.");
 
                     // Load data into staging table
-                    var loadCommandText = "LOAD DATA LOCAL INFILE '" + 
-                        csvFilePath.Replace("\\", "\\\\") + 
+                    var loadCommandText = "LOAD DATA LOCAL INFILE '" +
+                        csvFilePath.Replace("\\", "\\\\") +
                         "' INTO TABLE D3_Stage_Aplicacion_Pagos " +
                         "FIELDS TERMINATED BY ',' " +
                         "ENCLOSED BY '\"' " +
@@ -208,27 +246,76 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         }
     }
 
-    private string ConvertToUTF8WithBOM(string filePath)
+    private void D3_MoveFile(string sourceFilePath, string destinationFolder)
     {
-        var newFilePath = Path.Combine(
-            Path.GetDirectoryName(filePath)!,
-            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
-        );
-
-        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
-        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+        try
         {
-            while (!reader.EndOfStream)
+            if (!Directory.Exists(destinationFolder))
             {
-                writer.WriteLine(reader.ReadLine());
+                Directory.CreateDirectory(destinationFolder);
             }
-        }
 
-        return newFilePath;
+            var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
+            if (System.IO.File.Exists(destinationFilePath))
+            {
+                System.IO.File.Delete(destinationFilePath); // Overwrite existing file
+            }
+
+            System.IO.File.Move(sourceFilePath, destinationFilePath);
+            _logger.LogInformation($"File moved: {sourceFilePath} -> {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to move file: {sourceFilePath} -> {destinationFolder}");
+            throw;
+        }
     }
 
-    private async Task WriteLog(string content, string logPath)
+    private async Task D3_WriteLog(string content, string logPath)
     {
-        await System.IO.File.WriteAllTextAsync(logPath, content);
+        try
+        {
+            if (!Directory.Exists(Path.GetDirectoryName(logPath)))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+            }
+
+            await System.IO.File.WriteAllTextAsync(logPath, content);
+            _logger.LogInformation($"Log written to {logPath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to write log file.");
+            throw;
+        }
+    }
+
+    private void D3_MoveLogToHistoric(string logPath, string historicLogsFolder)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(logPath))
+            {
+                _logger.LogWarning($"Log file does not exist: {logPath}");
+                return;
+            }
+
+            if (!Directory.Exists(historicLogsFolder))
+            {
+                Directory.CreateDirectory(historicLogsFolder);
+            }
+
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
+            var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
+
+            System.IO.File.Move(logPath, destinationFilePath);
+            _logger.LogInformation($"Log file moved to historic logs: {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to move log file to historic logs.");
+            throw;
+        }
     }
 }
