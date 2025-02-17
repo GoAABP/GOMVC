@@ -5,7 +5,8 @@ namespace GOMVC.Data
 {
     public class AppDbContext : DbContext
     {
-        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+        public AppDbContext(DbContextOptions<AppDbContext> options)
+            : base(options)
         {
         }
 
@@ -18,9 +19,13 @@ namespace GOMVC.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Configure keyless entities (for read-only views or queries)
             modelBuilder.Entity<Gestiones>().HasNoKey();
             modelBuilder.Entity<Otorgamiento_Creditos>().HasNoKey();
 
+            // Define the primary key for the User entity using the new property name
+            modelBuilder.Entity<User>()
+                .HasKey(u => u.UserKey);
         }
     }
 }

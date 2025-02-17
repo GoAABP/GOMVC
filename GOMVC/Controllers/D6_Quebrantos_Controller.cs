@@ -483,4 +483,268 @@ public class D6_Quebrantos_Controller : Controller
         return newFilePath;
     }
 
+    [HttpPost]
+    public async Task<IActionResult> D6_ProcessQuebrantosCalculationsAndExport()
+    {
+        var logBuilder = new StringBuilder();
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started: Quebrantos Calculation & Export.");
+        _logger.LogInformation("Quebrantos Calculation & Export process started.");
+
+        try
+        {
+            // Step 1: Perform the Quebrantos Calculation
+            logBuilder.AppendLine("Executing Quebrantos calculations...");
+            await D6_CalculateQuebrantos(logBuilder);
+            logBuilder.AppendLine("Quebrantos calculations completed successfully.");
+
+            // Step 2: Export the most recent data to CSV
+            logBuilder.AppendLine("Executing export to CSV...");
+            var exportResult = await D6_ExportQuebrantosToCSV();
+            
+            // Append export result to logs
+            logBuilder.AppendLine($"Export result: {exportResult}");
+
+            logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
+            _logger.LogInformation("Quebrantos Calculation & Export process completed.");
+            
+            return Ok("Quebrantos calculation and export completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error during process execution: {ex.Message}");
+            _logger.LogError(ex, "Error in Quebrantos Calculation & Export process.");
+            return StatusCode(500, "An error occurred while processing Quebrantos calculations and export.");
+        }
+    }
+
+    private async Task D6_CalculateQuebrantos(StringBuilder logBuilder)
+    {
+        var sqlCommands = @"
+            -- Step 1: Drop and recreate the temporary table
+            DROP TEMPORARY TABLE IF EXISTS Temp_Latest_Quebrantos;
+
+            CREATE TEMPORARY TABLE Temp_Latest_Quebrantos (
+                Operacion INT,
+                Referencia INT,
+                Nombre VARCHAR(255),
+                Convenio VARCHAR(255),
+                vFinancingtypeid VARCHAR(50),
+                KVigente DECIMAL(10, 2),
+                KVencido DECIMAL(10, 2),
+                IntVencido DECIMAL(10, 2),
+                IVAIntVencido DECIMAL(10, 2),
+                IntVencidoCO DECIMAL(10, 2),
+                IVAIntVencidoCO DECIMAL(10, 2),
+                TotalQuebranto DECIMAL(10, 2),
+                PagosRealizados DECIMAL(10, 2),
+                SdoPendiente DECIMAL(10, 2),
+                IntXDevengar DECIMAL(10, 2),
+                SdoTotalXPagar DECIMAL(10, 2),
+                FechaQuebranto VARCHAR(10),
+                UltPagoTeorico VARCHAR(10),
+                UltimoPago VARCHAR(10),
+                UltPagoApl VARCHAR(10),
+                Gestor VARCHAR(255),
+                nCommission DECIMAL(10, 2),
+                nCommTax DECIMAL(10, 2),
+                vMotive VARCHAR(255),
+                INDEX idx_operacion (Operacion)
+            ) ENGINE=InnoDB;
+
+            -- Step 2: Insert records from D6_Quebrantos where FechaGenerado is the most recent
+            INSERT INTO Temp_Latest_Quebrantos
+            SELECT 
+                q.Operacion, q.Referencia, q.Nombre, q.Convenio, q.vFinancingtypeid, q.KVigente, q.KVencido, 
+                q.IntVencido, q.IVAIntVencido, q.IntVencidoCO, q.IVAIntVencidoCO, q.TotalQuebranto, 
+                q.PagosRealizados, q.SdoPendiente, q.IntXDevengar, q.SdoTotalXPagar, q.FechaQuebranto, 
+                q.UltPagoTeorico, q.UltimoPago, q.UltPagoApl, q.Gestor, q.nCommission, q.nCommTax, q.vMotive
+            FROM D6_Quebrantos q
+            JOIN (
+                SELECT Operacion, MAX(FechaGenerado) AS MostRecentFechaGenerado
+                FROM D6_Quebrantos
+                GROUP BY Operacion
+            ) lfg 
+            ON q.Operacion = lfg.Operacion 
+            AND q.FechaGenerado = lfg.MostRecentFechaGenerado;
+
+            -- Drop and recreate Temp_Total_Estrategias
+            DROP TEMPORARY TABLE IF EXISTS Temp_Total_Estrategias;
+
+            CREATE TEMPORARY TABLE Temp_Total_Estrategias (
+                id_credito INT NOT NULL,
+                total_pagos DECIMAL(18,2) NOT NULL DEFAULT 0
+            );
+
+            INSERT INTO Temp_Total_Estrategias (id_credito, total_pagos)
+            SELECT 
+                d.id_credito,
+                COALESCE(SUM(d.pago), 0) AS total_pagos
+            FROM d3_aplicacion_pagos d
+            INNER JOIN ci1_pagos_estrategia_acumulados c ON d.id_pago = c.id_pago
+            GROUP BY d.id_credito;
+
+            -- Insert into R1_Quebrantos_Calculado
+            INSERT INTO R1_Quebrantos_Calculado (
+                Operacion, Referencia, Nombre, Convenio, vFinancingtypeid, KVigente, KVencido, 
+                IntVencido, IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, 
+                PagosRealizados, SdoPendiente, IntXDevengar, SdoTotalXPagar, FechaQuebranto, 
+                UltPagoTeorico, UltimoPago, UltPagoApl, Gestor, nCommission, nCommTax, 
+                vMotive, TotalEstrategia, SaldoReal, CapitalQuebrantado, Recuperacion, 
+                Month, Year, QuebrantoContable, Producto, Financiamiento, Valid, 
+                SaldoCapital, Motivo, FechaGenerado
+            )
+            SELECT 
+                t.Operacion, t.Referencia, t.Nombre, t.Convenio, t.vFinancingtypeid, 
+                t.KVigente, t.KVencido, t.IntVencido, t.IVAIntVencido, t.IntVencidoCO, 
+                t.IVAIntVencidoCO, t.TotalQuebranto, t.PagosRealizados, t.SdoPendiente, 
+                t.IntXDevengar, t.SdoTotalXPagar, t.FechaQuebranto, t.UltPagoTeorico, 
+                t.UltimoPago, t.UltPagoApl, t.Gestor, t.nCommission, t.nCommTax, t.vMotive,
+
+                -- Get TotalEstrategia from Temp_Total_Estrategias
+                COALESCE(te.total_pagos, 0) AS TotalEstrategia,
+
+                -- Calculate SaldoReal
+                COALESCE(t.SdoTotalXPagar, 0) + COALESCE(te.total_pagos, 0) AS SaldoReal,
+
+                -- Calculate CapitalQuebrantado
+                COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0) AS CapitalQuebrantado,
+
+                -- Calculate Recuperacion
+                COALESCE(t.PagosRealizados, 0) - COALESCE(te.total_pagos, 0) AS Recuperacion,
+
+                -- Extract Month and Year from FechaQuebranto
+                MONTH(STR_TO_DATE(t.FechaQuebranto, '%Y-%m-%d')) AS Month,
+                YEAR(STR_TO_DATE(t.FechaQuebranto, '%Y-%m-%d')) AS Year,
+
+                -- Calculate QuebrantoContable
+                COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0) + COALESCE(t.IntVencido, 0) + COALESCE(t.IVAIntVencido, 0) AS QuebrantoContable,
+
+                -- Get Producto from c2_financiamiento
+                COALESCE(cf.producto, 'Desconocido') AS Producto,
+
+                -- Financiamiento
+                t.vFinancingtypeid AS Financiamiento,
+
+                -- Count occurrences of Operacion
+                COUNT(*) OVER(PARTITION BY t.Operacion) AS Valid,
+
+                -- Calculate SaldoCapital
+                (COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0)) - 
+                (COALESCE(t.PagosRealizados, 0) - COALESCE(te.total_pagos, 0)) AS SaldoCapital,
+
+                NULL AS Motivo,
+                NOW() AS FechaGenerado
+            FROM Temp_Latest_Quebrantos t
+            LEFT JOIN Temp_Total_Estrategias te ON t.Operacion = te.id_credito
+            LEFT JOIN c2_financiamiento cf ON t.vFinancingtypeid = cf.Tipo_Financiamiento;";
+
+        using (var connection = new MySqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                try
+                {
+                    var command = new MySqlCommand(sqlCommands, connection, transaction);
+                    await command.ExecuteNonQueryAsync();
+
+                    logBuilder.AppendLine("Quebrantos calculations completed successfully.");
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"Error during Quebrantos calculations: {ex.Message}");
+                    _logger.LogError(ex, "Error during Quebrantos calculations.");
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task<IActionResult> D6_ExportQuebrantosToCSV()
+    {
+        var logBuilder = new StringBuilder();
+        var exportFolderPath = @"C:\Users\Go Credit\Documents\DATA\EXPORTS";
+        var mostRecentDateQuery = "SELECT MAX(FechaGenerado) FROM R1_Quebrantos_Calculado;";
+        
+        try
+        {
+            // Ensure the export folder exists
+            if (!Directory.Exists(exportFolderPath))
+            {
+                Directory.CreateDirectory(exportFolderPath);
+            }
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                // Retrieve the most recent FechaGenerado
+                DateTime mostRecentDate;
+                using (var cmd = new MySqlCommand(mostRecentDateQuery, connection))
+                {
+                    var result = await cmd.ExecuteScalarAsync();
+                    if (result == null || result == DBNull.Value)
+                    {
+                        logBuilder.AppendLine("No data found in R1_Quebrantos_Calculado.");
+                        return NotFound("No data available for export.");
+                    }
+                    mostRecentDate = Convert.ToDateTime(result);
+                }
+
+                logBuilder.AppendLine($"Exporting data for most recent FechaGenerado: {mostRecentDate:yyyy-MM-dd HH:mm:ss}");
+
+                var sqlQuery = @"
+                    SELECT * 
+                    FROM R1_Quebrantos_Calculado
+                    WHERE FechaGenerado = @MostRecentDate;";
+
+                using (var command = new MySqlCommand(sqlQuery, connection))
+                {
+                    command.Parameters.AddWithValue("@MostRecentDate", mostRecentDate);
+                    
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        if (!reader.HasRows)
+                        {
+                            logBuilder.AppendLine("No records found for the most recent date.");
+                            return NotFound("No records to export.");
+                        }
+
+                        var exportFilePath = Path.Combine(exportFolderPath, $"Quebrantos_Export_{mostRecentDate:yyyyMMdd_HHmmss}.csv");
+
+                        using (var writer = new StreamWriter(exportFilePath, false, new UTF8Encoding(true)))
+                        {
+                            // Write headers
+                            var columnNames = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName);
+                            await writer.WriteLineAsync(string.Join(",", columnNames));
+
+                            // Write rows
+                            while (await reader.ReadAsync())
+                            {
+                                var row = new List<string>();
+                                for (int i = 0; i < reader.FieldCount; i++)
+                                {
+                                    var value = reader[i]?.ToString() ?? "";
+                                    value = value.Replace("\"", "\"\""); // Escape double quotes
+                                    row.Add($"\"{value}\"");
+                                }
+                                await writer.WriteLineAsync(string.Join(",", row));
+                            }
+                        }
+
+                        logBuilder.AppendLine($"Export successful: {exportFilePath}");
+                        return Ok($"Exported successfully to: {exportFilePath}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error exporting data: {ex.Message}");
+            _logger.LogError(ex, "Error exporting R1_Quebrantos_Calculado.");
+            return StatusCode(500, "Error exporting data.");
+        }
+    }
 }

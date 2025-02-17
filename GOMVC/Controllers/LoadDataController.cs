@@ -10,6 +10,7 @@ using SharpCompress.Archives;
 using SharpCompress.Common;
 using System.Data;
 using Org.BouncyCastle.Asn1.Misc;
+using GOMVC.Controllers;
 
 
 public class LoadDataController : Controller
@@ -39,8 +40,8 @@ public class LoadDataController : Controller
         {
             "D1_Saldos_Cartera",
             "D1B_Saldos_Cartera",
-            "D2-Saldos_Contables",
-            "D2B-Saldos_Contables",
+            "D2_Saldos_Contables",
+            "D2B_Saldos_Contables",
             "D3_Aplicacion_Pagos",
             "D4_Otorgamiento_Creditos",
             "D5_Gestiones",
@@ -53,7 +54,8 @@ public class LoadDataController : Controller
             "C3_Motios",
             "C4_Bancos",
             "C6_Resultados_Avance",
-            "15-LoadDemograficos"
+            "R1_Quebrantos_Calculado",
+            "R3_LayoutMc"
         };
         return View(activities);
     }
@@ -81,14 +83,14 @@ public class LoadDataController : Controller
                     result = await saldosCarteraControllerb.D1_ProcessHistoricSaldosCartera();
                     break;    
 
-                case "d2-saldos_contables":
+                case "d2_saldos_contables":
                     var saldosContablesController = new D2_Saldos_Contables_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
                         _configuration);
                     result = await saldosContablesController.D2_ProcessSaldosContables();
                     break;
 
-                    case "d2b-saldos_contables":
+                    case "d2b_saldos_contables":
                     var saldosContablesControllerb = new D2_Saldos_Contables_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
                         _configuration);
@@ -121,6 +123,34 @@ public class LoadDataController : Controller
                         HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
                         _configuration);
                     result = await quebrantosController.D6_ProcessQuebrantos();
+                    break;
+                
+                case "d7_juicios":
+                    var juiciosController = new D7_Juicios_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D7_Juicios_Controller>>(),
+                        _configuration);
+                    result = await juiciosController.D7_ProcessJuicios();
+                    break;
+
+                case "d8_sistema":
+                    var sistemasController = new D8_Sistema_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D8_Sistema_Controller>>(),
+                        _configuration);
+                    result = await sistemasController.D8_ProcessSistema();
+                    break;
+
+                case "r1_quebrantos_calculado":
+                    var quebrantosControllerExport = new D6_Quebrantos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
+                        _configuration);
+                    result = await quebrantosControllerExport.D6_ProcessQuebrantosCalculationsAndExport();
+                    break;
+                
+                case "r3_layoutmc":
+                    var layout_Mc_Controller = new R3_LayoutMc_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<R3_LayoutMc_Controller>>(),
+                        _configuration);
+                    result = await layout_Mc_Controller.R3_ProcessLayout();
                     break;
 
                 default:

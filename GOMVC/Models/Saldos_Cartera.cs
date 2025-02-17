@@ -1,15 +1,19 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace GOMVC.Models
 {
+    [Table("D1_Saldos_Cartera")]
     public class Saldos_Cartera
     {
         [Key]
+        [Column("D1_Key")]
         public int DBKEY { get; set; }
+        
         public int? Id_Solicitud { get; set; }
         public int? Id_Credito { get; set; }
-        public int? IdPersona { get; set; }
+        public int? Id_Persona { get; set; }
         public string? Referencia { get; set; }
         public string? Afiliado { get; set; }
         public string? Nombre { get; set; }
