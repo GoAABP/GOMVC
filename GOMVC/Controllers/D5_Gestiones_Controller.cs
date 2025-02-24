@@ -14,26 +14,44 @@ public class D5_Gestiones_Controller : Controller
     private readonly ILogger<D5_Gestiones_Controller> _logger;
     private readonly IConfiguration _configuration;
     private readonly string _connectionString;
+    
+    // Directorios base
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
     private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
+    private readonly string _logsFolder = @"C:\Users\Go Credit\Documents\DATA\LOGS";
+    private readonly string _historicLogsFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC LOGS";
+    
+    // Carpetas de movimiento dentro de Historic Files
+    private readonly string _archiveFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Archive";
+    private readonly string _processedFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Processed";
+    private readonly string _errorFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Error";
+
+    // Nombre dinámico del log usando el nombre del controlador
+    private readonly string _logFileName;
 
     public D5_Gestiones_Controller(ILogger<D5_Gestiones_Controller> logger, IConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+        // Generar el nombre del log dinámicamente usando el nombre de la clase.
+        _logFileName = $"{nameof(D5_Gestiones_Controller)}.log";
+        var logPath = Path.Combine(_logsFolder, _logFileName);
+        // Si ya existe un log con ese nombre, moverlo a la carpeta histórica de logs.
+        if (System.IO.File.Exists(logPath))
+        {
+            MoveExistingLog(logPath, _historicLogsFolder);
+        }
     }
 
     [HttpPost]
     public async Task<IActionResult> D5_ProcessGestiones()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D5_Gestiones.log";
-        var historicLogsFolder = Path.Combine(_historicFilePath, "Logs");
-        var archiveFolder = Path.Combine(_historicFilePath, "Archive");
-        var processedFolder = Path.Combine(_historicFilePath, "Processed");
-        var errorFolder = Path.Combine(_historicFilePath, "Error");
+        var logPath = Path.Combine(_logsFolder, _logFileName);
         var logBuilder = new StringBuilder();
-        var hasErrors = false;
+        bool hasErrors = false;
 
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D5 process started.");
         _logger.LogInformation("D5 process started.");
@@ -51,7 +69,7 @@ public class D5_Gestiones_Controller : Controller
         logBuilder.AppendLine($"{files.Length} files matching 'Re_GestionesRO_*.xlsx' found.");
         _logger.LogInformation($"{files.Length} files matching 'Re_GestionesRO_*.xlsx' found.");
 
-        // Step 1: Truncate the staging table before processing any files
+        // Step 1: Truncar la tabla de staging antes de procesar cualquier archivo
         await D5_TruncateStagingTableAsync(logBuilder);
 
         foreach (var file in files)
@@ -59,15 +77,20 @@ public class D5_Gestiones_Controller : Controller
             logBuilder.AppendLine($"Processing file: {file}");
             _logger.LogInformation($"Processing file: {file}");
 
+            // Variables para almacenar rutas de archivos derivados
+            string? convertedFilePath = null;
+            string? sanitizedFilePath = null;
+
             try
             {
-                // Step 2: Process the Excel file in chunks
+                // Step 2: Procesar el archivo Excel en trozos
                 await D5_ProcessLargeXlsx(file, logBuilder);
 
-                // Step 3: Move files to archive/processed folders
-                D5_MoveFile(file, archiveFolder, logBuilder);
+                // Step 3: Mover el archivo original a Archive
+                D5_MoveFile(file, _archiveFolder, logBuilder);
 
-                // Step 4: Move data from staging to final table
+                // Para este controlador se asume que los datos ya fueron cargados en staging,
+                // y se procede a moverlos a la tabla final:
                 await D5_MoveDataToFinalTableAsync(logBuilder);
 
                 logBuilder.AppendLine($"File {file} processed successfully.");
@@ -79,8 +102,16 @@ public class D5_Gestiones_Controller : Controller
                 _logger.LogError(ex, $"Error processing file {file}");
                 hasErrors = true;
 
-                // Move problematic files to error folder
-                D5_MoveFile(file, errorFolder, logBuilder);
+                // Movimiento de todos los archivos relacionados a la carpeta de error.
+                D5_MoveFile(file, _errorFolder, logBuilder);
+                if (!string.IsNullOrEmpty(convertedFilePath) && System.IO.File.Exists(convertedFilePath))
+                    D5_MoveFile(convertedFilePath, _errorFolder, logBuilder);
+                if (!string.IsNullOrEmpty(sanitizedFilePath) && System.IO.File.Exists(sanitizedFilePath))
+                    D5_MoveFile(sanitizedFilePath, _errorFolder, logBuilder);
+
+                await D5_WriteLog(logBuilder.ToString(), logPath);
+                // Lanzar la excepción para propagar el error
+                throw;
             }
         }
 
@@ -88,14 +119,14 @@ public class D5_Gestiones_Controller : Controller
         _logger.LogInformation("D5 process completed.");
         await D5_WriteLog(logBuilder.ToString(), logPath);
 
-        // Move the log to the historic folder
-        D5_MoveLogToHistoric(logPath, historicLogsFolder);
+        // Mover el log final a la carpeta de logs históricos
+        D5_MoveLogToHistoric(logPath, _historicLogsFolder);
 
         return hasErrors
             ? StatusCode(500, "D5 process completed with errors. Check the log for details.")
             : Ok("D5 process completed successfully.");
     }
-    
+
     private async Task D5_TruncateStagingTableAsync(StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
@@ -118,9 +149,9 @@ public class D5_Gestiones_Controller : Controller
         {
             ExcelWorksheet worksheet = package.Workbook.Worksheets[0];
             int totalRows = worksheet.Dimension.Rows;
-            int chunkSize = 10000; // Process 10,000 rows at a time
+            int chunkSize = 10000; // Procesar 10,000 filas a la vez
 
-            for (int startRow = 2; startRow <= totalRows; startRow += chunkSize) // Start from 2 to skip header
+            for (int startRow = 2; startRow <= totalRows; startRow += chunkSize) // Saltar encabezado
             {
                 int endRow = Math.Min(startRow + chunkSize - 1, totalRows);
                 await D5_ProcessChunkAsync(worksheet, startRow, endRow, logBuilder);
@@ -132,7 +163,7 @@ public class D5_Gestiones_Controller : Controller
     {
         for (int row = startRow; row <= endRow; row++)
         {
-            // Read values from the worksheet based on the provided headers
+            // Se leen los valores de la hoja
             var indice = int.TryParse(worksheet.Cells[row, 1].Text.Trim(), out var ind) ? ind : (int?)null;
             var agenciaRegistro = worksheet.Cells[row, 2].Text.Trim();
             var causaNoPago = worksheet.Cells[row, 3].Text.Trim();
@@ -144,8 +175,8 @@ public class D5_Gestiones_Controller : Controller
             var coordenadas = worksheet.Cells[row, 9].Text.Trim();
             var credito = int.TryParse(worksheet.Cells[row, 10].Text.Trim(), out var cred) ? cred : (int?)null;
             var estatusPromesa = worksheet.Cells[row, 11].Text.Trim();
-            var fechaActividadStr = worksheet.Cells[row, 12].Text.Trim(); // Keep as string
-            var fechaPromesaStr = worksheet.Cells[row, 13].Text.Trim(); // Keep as string
+            var fechaActividadStr = worksheet.Cells[row, 12].Text.Trim();
+            var fechaPromesaStr = worksheet.Cells[row, 13].Text.Trim();
             var montoPromesa = decimal.TryParse(worksheet.Cells[row, 14].Text.Trim(), out var monto) ? monto : (decimal?)null;
             var origen = worksheet.Cells[row, 15].Text.Trim();
             var producto = worksheet.Cells[row, 16].Text.Trim();
@@ -154,10 +185,8 @@ public class D5_Gestiones_Controller : Controller
             var tipoPago = worksheet.Cells[row, 19].Text.Trim();
             var usuarioRegistro = worksheet.Cells[row, 20].Text.Trim();
 
-            // Log the raw values for debugging
             logBuilder.AppendLine($"Row {row}: Raw Fecha Actividad='{fechaActividadStr}', Raw Fecha Promesa='{fechaPromesaStr}'");
 
-            // Save to database as strings
             await D5_SaveToDatabaseAsync(indice, agenciaRegistro, causaNoPago, causaNoDomiciliacion, codigoAccion, codigoResultado,
                 comentarios, contactoGenerado, coordenadas, credito, estatusPromesa, fechaActividadStr, fechaPromesaStr,
                 montoPromesa, origen, producto, resultado, telefono, tipoPago, usuarioRegistro, logBuilder);
@@ -165,10 +194,10 @@ public class D5_Gestiones_Controller : Controller
     }
 
     private async Task D5_SaveToDatabaseAsync(int? indice, string agenciaRegistro, string causaNoPago, string causaNoDomiciliacion,
-    string codigoAccion, string codigoResultado, string comentarios, string contactoGenerado, string coordenadas,
-    int? credito, string estatusPromesa, string fechaActividadStr, string fechaPromesaStr, // Change to string
-    decimal? montoPromesa, string origen, string producto, string resultado, string telefono, string tipoPago, string usuarioRegistro,
-    StringBuilder logBuilder)
+        string codigoAccion, string codigoResultado, string comentarios, string contactoGenerado, string coordenadas,
+        int? credito, string estatusPromesa, string fechaActividadStr, string fechaPromesaStr,
+        decimal? montoPromesa, string origen, string producto, string resultado, string telefono, string tipoPago, string usuarioRegistro,
+        StringBuilder logBuilder)
     {
         var sqlInsertCommand = @"
             INSERT INTO D5_Stage_Gestiones (
@@ -202,8 +231,8 @@ public class D5_Gestiones_Controller : Controller
                     command.Parameters.AddWithValue("@Coordenadas", coordenadas);
                     command.Parameters.AddWithValue("@Credito", credito.HasValue ? (object)credito.Value : DBNull.Value);
                     command.Parameters.AddWithValue("@EstatusPromesa", estatusPromesa);
-                    command.Parameters.AddWithValue("@FechaActividad", fechaActividadStr); // Use string directly
-                    command.Parameters.AddWithValue("@FechaPromesa", fechaPromesaStr); // Use string directly
+                    command.Parameters.AddWithValue("@FechaActividad", fechaActividadStr);
+                    command.Parameters.AddWithValue("@FechaPromesa", fechaPromesaStr);
                     command.Parameters.AddWithValue("@MontoPromesa", montoPromesa.HasValue ? (object)montoPromesa.Value : DBNull.Value);
                     command.Parameters.AddWithValue("@Origen", origen);
                     command.Parameters.AddWithValue("@Producto", producto);
@@ -232,7 +261,7 @@ public class D5_Gestiones_Controller : Controller
     [HttpPost]
     public async Task<IActionResult> D5_ProcessDataToFinalTable()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D5_Gestiones.log";
+        var logPath = Path.Combine(_logsFolder, _logFileName);
         var logBuilder = new StringBuilder();
 
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process to move data to final table started.");
@@ -240,7 +269,6 @@ public class D5_Gestiones_Controller : Controller
 
         try
         {
-            // Call the method to move data to the final table
             await D5_MoveDataToFinalTableAsync(logBuilder);
 
             logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Data moved to final table successfully.");
@@ -254,13 +282,12 @@ public class D5_Gestiones_Controller : Controller
         }
         finally
         {
-            // Write the log to the specified log file
             await D5_WriteLog(logBuilder.ToString(), logPath);
         }
 
         return Ok("Data moved to final table successfully.");
     }
-   
+    
     private async Task D5_MoveDataToFinalTableAsync(StringBuilder logBuilder)
     {
         var sqlInsertCommand = @"
@@ -269,54 +296,32 @@ public class D5_Gestiones_Controller : Controller
             SELECT 
                 s.Agencia_Registro, s.Causa_No_Pago, s.Causa_No_Domiciliacion, s.Codigo_Accion, s.Codigo_Resultado,
                 s.Comentarios, s.Contacto_Generado, s.Coordenadas, s.Credito, s.Estatus_Promesa,
-
-                -- Ensure empty strings are NULL before conversion
                 CASE 
                     WHEN TRIM(NULLIF(s.Fecha_Actividad, '')) IS NULL THEN NULL
-                    
-                    -- MM/dd/yy H:mm (Single-Digit Hour)
                     WHEN s.Fecha_Actividad REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{2} [0-9]{1}:[0-9]{2}$' 
                     THEN STR_TO_DATE(s.Fecha_Actividad, '%m/%d/%y %k:%i')
-
-                    -- MM/dd/yy HH:mm (Two-Digit Hour)
                     WHEN s.Fecha_Actividad REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{2} [0-9]{2}:[0-9]{2}$' 
                     THEN STR_TO_DATE(s.Fecha_Actividad, '%m/%d/%y %H:%i')
-
-                    -- MM/dd/yy H:mm:ss (Single-Digit Hour with Seconds)
                     WHEN s.Fecha_Actividad REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{2} [0-9]{1}:[0-9]{2}:[0-9]{2}$' 
                     THEN STR_TO_DATE(s.Fecha_Actividad, '%m/%d/%y %k:%i:%s')
-
-                    -- MM/dd/yy HH:mm:ss (Two-Digit Hour with Seconds)
                     WHEN s.Fecha_Actividad REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$' 
                     THEN STR_TO_DATE(s.Fecha_Actividad, '%m/%d/%y %H:%i:%s')
-
-                    -- dd/MM/yyyy H:mm (Single-Digit Hour)
                     WHEN s.Fecha_Actividad REGEXP '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{1}:[0-9]{2}$' 
                     THEN STR_TO_DATE(s.Fecha_Actividad, '%d/%m/%Y %k:%i')
-
-                    -- dd/MM/yyyy HH:mm (Two-Digit Hour)
                     WHEN s.Fecha_Actividad REGEXP '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}$' 
                     THEN STR_TO_DATE(s.Fecha_Actividad, '%d/%m/%Y %H:%i')
-
-                    -- dd/MM/yyyy (Defaults to 00:00:00 Time)
                     WHEN s.Fecha_Actividad REGEXP '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' 
                     THEN STR_TO_DATE(CONCAT(s.Fecha_Actividad, ' 00:00:00'), '%d/%m/%Y %H:%i:%s')
-
                     ELSE NULL
                 END AS Fecha_Actividad,
-
-                -- Ensure Fecha_Promesa is correctly parsed
                 CASE 
                     WHEN TRIM(NULLIF(s.Fecha_Promesa, '')) IS NULL THEN NULL
                     WHEN s.Fecha_Promesa REGEXP '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' 
                     THEN STR_TO_DATE(s.Fecha_Promesa, '%d/%m/%Y')
                     ELSE NULL
                 END AS Fecha_Promesa,
-
                 s.Monto_Promesa, s.Origen, s.Producto, s.Resultado, s.Telefono, s.Tipo_Pago, s.Usuario_Registro
             FROM D5_Stage_Gestiones s;
-
-            -- Step 2: Insert processed records into D5_Gestiones
             INSERT INTO D5_Gestiones (
                 Agencia_Registro, Causa_No_Pago, Causa_No_Domiciliacion, Codigo_Accion, Codigo_Resultado,
                 Comentarios, Contacto_Generado, Coordenadas, Id_Credito, Estatus_Promesa,
@@ -329,8 +334,6 @@ public class D5_Gestiones_Controller : Controller
                 t.Fecha_Actividad, t.Fecha_Promesa, t.Monto_Promesa, t.Origen, t.Producto, 
                 t.Resultado, t.Telefono, t.Tipo_Pago, t.Usuario_Registro
             FROM Temp_D5_Stage t;
-
-            -- Step 3: Drop the temporary table
             DROP TEMPORARY TABLE IF EXISTS Temp_D5_Stage;";
 
         using (var connection = new MySqlConnection(_connectionString))
@@ -343,7 +346,7 @@ public class D5_Gestiones_Controller : Controller
             }
         }
     }
-    
+
     private void D5_MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder)
     {
         try
@@ -356,7 +359,7 @@ public class D5_Gestiones_Controller : Controller
             var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
             if (System.IO.File.Exists(destinationFilePath))
             {
-                System.IO.File.Delete(destinationFilePath); // Overwrite existing file
+                System.IO.File.Delete(destinationFilePath); // Sobrescribir si existe
             }
 
             System.IO.File.Move(sourceFilePath, destinationFilePath);
@@ -367,6 +370,26 @@ public class D5_Gestiones_Controller : Controller
         {
             logBuilder.AppendLine($"Error moving file {sourceFilePath} to {destinationFolder}: {ex.Message}");
             _logger.LogError(ex, $"Error moving file {sourceFilePath} to {destinationFolder}");
+            throw;
+        }
+    }
+
+    private async Task D5_WriteLog(string content, string logPath)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(logPath);
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory!);
+            }
+            await System.IO.File.WriteAllTextAsync(logPath, content);
+            _logger.LogInformation($"Log written to: {logPath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error writing log to {logPath}");
+            throw;
         }
     }
 
@@ -390,30 +413,32 @@ public class D5_Gestiones_Controller : Controller
             var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
 
             System.IO.File.Move(logPath, destinationFilePath);
-            _logger.LogInformation($"Log file moved to historic folder: {destinationFilePath}");
+            _logger.LogInformation($"Log file moved to historic logs: {destinationFilePath}");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Error moving log file to historic folder: {ex.Message}");
+            throw;
         }
     }
 
-    private async Task D5_WriteLog(string content, string logPath)
+    private void MoveExistingLog(string logPath, string historicLogsFolder)
     {
         try
         {
-            if (!Directory.Exists(Path.GetDirectoryName(logPath)))
+            if (!Directory.Exists(historicLogsFolder))
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                Directory.CreateDirectory(historicLogsFolder);
             }
-
-            await System.IO.File.WriteAllTextAsync(logPath, content);
-            _logger.LogInformation($"Log written to: {logPath}");
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var destinationFilePath = Path.Combine(historicLogsFolder,
+                Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath));
+            System.IO.File.Move(logPath, destinationFilePath);
+            _logger.LogInformation($"Existing log moved to historic folder: {destinationFilePath}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error writing log to {logPath}");
-            throw;
+            _logger.LogError(ex, $"Error moving existing log file: {ex.Message}");
         }
     }
 }

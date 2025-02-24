@@ -13,8 +13,20 @@ public class D2_Saldos_Contables_Controller : Controller
     private readonly ILogger<D2_Saldos_Contables_Controller> _logger;
     private readonly IConfiguration _configuration;
     private readonly string _connectionString;
-    private readonly string _filePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\FLAT FILES";
-    private readonly string _historicFilePath = @"C:\\Users\\Go Credit\\Documents\\DATA\\HISTORIC FILES";
+    
+    // Directorios base para archivos y logs
+    private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
+    private readonly string _historicFilesFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
+    private readonly string _logsFolder = @"C:\Users\Go Credit\Documents\DATA\LOGS";
+    private readonly string _historicLogsFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC LOGS";
+
+    // Carpetas de movimiento dentro de Historic Files
+    private readonly string _archiveFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Archive";
+    private readonly string _processedFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Processed";
+    private readonly string _errorFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Error";
+
+    // Nombre dinámico del log basado en el controlador
+    private readonly string _logFileName;
 
     public D2_Saldos_Contables_Controller(ILogger<D2_Saldos_Contables_Controller> logger, IConfiguration configuration)
     {
@@ -22,12 +34,20 @@ public class D2_Saldos_Contables_Controller : Controller
         _configuration = configuration;
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        _logFileName = $"{nameof(D2_Saldos_Contables_Controller)}.log";
+
+        // Si existe un log con el mismo nombre, lo movemos a la carpeta histórica de logs
+        var logPath = Path.Combine(_logsFolder, _logFileName);
+        if (System.IO.File.Exists(logPath))
+        {
+            MoveExistingLog(logPath, _historicLogsFolder);
+        }
     }
 
     [HttpPost]
     public async Task<IActionResult> D2_ProcessSaldosContables()
     {
-        var logPath = @"C:\\Users\\Go Credit\\Documents\\DATA\\LOGS\\D2_Saldos_Contables.log";
+        var logPath = Path.Combine(_logsFolder, _logFileName);
         var logBuilder = new StringBuilder();
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process started.");
         _logger.LogInformation("Process started.");
@@ -42,35 +62,45 @@ public class D2_Saldos_Contables_Controller : Controller
             return NotFound(errorLog);
         }
 
-        var archiveFolder = Path.Combine(_historicFilePath, "Archive");
-        var processedFolder = Path.Combine(_historicFilePath, "Processed");
-        var errorFolder = Path.Combine(_historicFilePath, "Error");
-
         foreach (var file in files)
         {
+            string? convertedFilePath = null;
+            string? sanitizedFilePath = null;
             logBuilder.AppendLine($"Processing file: {file}");
 
             try
             {
-                var convertedFilePath = D2_ConvertToUTF8WithBOM(file);
+                convertedFilePath = D2_ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                var sanitizedFilePath = D2_PreprocessCsvFile(convertedFilePath, logBuilder);
+                sanitizedFilePath = D2_PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
                 await D2_BulkInsertToStage(sanitizedFilePath, logBuilder);
                 await D2_InsertToFinalTable(logBuilder);
 
-                D2_MoveFile(file, archiveFolder, logBuilder);
-                D2_MoveFile(convertedFilePath, processedFolder, logBuilder);
-                D2_MoveFile(sanitizedFilePath, processedFolder, logBuilder);
+                // Movimiento de archivos en caso de éxito
+                D2_MoveFile(file, _archiveFolder, logBuilder);
+                if (convertedFilePath != null)
+                    D2_MoveFile(convertedFilePath, _processedFolder, logBuilder);
+                if (sanitizedFilePath != null)
+                    D2_MoveFile(sanitizedFilePath, _processedFolder, logBuilder);
             }
             catch (Exception ex)
             {
                 logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
                 _logger.LogError(ex, $"Error processing file {file}");
 
-                D2_MoveFile(file, errorFolder, logBuilder);
+                // Movimiento de todos los archivos relacionados a la carpeta de error
+                D2_MoveFile(file, _errorFolder, logBuilder);
+                if (convertedFilePath != null && System.IO.File.Exists(convertedFilePath))
+                    D2_MoveFile(convertedFilePath, _errorFolder, logBuilder);
+                if (sanitizedFilePath != null && System.IO.File.Exists(sanitizedFilePath))
+                    D2_MoveFile(sanitizedFilePath, _errorFolder, logBuilder);
+
+                await D2_WriteLog(logBuilder.ToString(), logPath);
+                // Lanzamos la excepción para que el proceso no se considere exitoso
+                throw;
             }
         }
 
@@ -78,8 +108,8 @@ public class D2_Saldos_Contables_Controller : Controller
         _logger.LogInformation("Process completed.");
         await D2_WriteLog(logBuilder.ToString(), logPath);
 
-        var historicLogsFolder = @"C:\\Users\\Go Credit\\Documents\\DATA\\HISTORIC LOGS";
-        D2_MoveLogToHistoric(logPath, historicLogsFolder);
+        // Movimiento del log finalizado a la carpeta histórica de logs
+        D2_MoveLogToHistoric(logPath, _historicLogsFolder);
 
         return Ok("Files processed successfully.");
     }
@@ -87,7 +117,7 @@ public class D2_Saldos_Contables_Controller : Controller
     [HttpPost]
     public async Task<IActionResult> D2_ProcessHistoricSaldosContables()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D2_Historic_Saldos_Contables.log";
+        var logPath = Path.Combine(_logsFolder, _logFileName);
         var logBuilder = new StringBuilder();
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process started.");
         _logger.LogInformation("Historic process started.");
@@ -102,12 +132,10 @@ public class D2_Saldos_Contables_Controller : Controller
             return NotFound(errorLog);
         }
 
-        var archiveFolder = Path.Combine(_historicFilePath, "Archive");
-        var processedFolder = Path.Combine(_historicFilePath, "Processed");
-        var errorFolder = Path.Combine(_historicFilePath, "Error");
-
         foreach (var file in files)
         {
+            string? convertedFilePath = null;
+            string? sanitizedFilePath = null;
             logBuilder.AppendLine($"Processing file: {file}");
 
             try
@@ -120,6 +148,7 @@ public class D2_Saldos_Contables_Controller : Controller
                     var errorLog = $"Invalid file name format: {fileName}";
                     logBuilder.AppendLine(errorLog);
                     _logger.LogError(errorLog);
+                    D2_MoveFile(file, _errorFolder, logBuilder);
                     continue;
                 }
 
@@ -138,28 +167,38 @@ public class D2_Saldos_Contables_Controller : Controller
                 };
 
                 var fechaGenerado = parsedDate.Add(timeOffset);
-
                 logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
 
-                var convertedFilePath = D2_ConvertToUTF8WithBOM(file);
+                convertedFilePath = D2_ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                var sanitizedFilePath = D2_PreprocessCsvFile(convertedFilePath, logBuilder);
+                sanitizedFilePath = D2_PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
                 await D2_BulkInsertToStage(sanitizedFilePath, logBuilder);
                 await D2_InsertHistoricData(fechaGenerado, logBuilder);
 
-                D2_MoveFile(file, archiveFolder, logBuilder);
-                D2_MoveFile(convertedFilePath, processedFolder, logBuilder);
-                D2_MoveFile(sanitizedFilePath, processedFolder, logBuilder);
+                // Movimiento de archivos en caso de éxito
+                D2_MoveFile(file, _archiveFolder, logBuilder);
+                if (convertedFilePath != null)
+                    D2_MoveFile(convertedFilePath, _processedFolder, logBuilder);
+                if (sanitizedFilePath != null)
+                    D2_MoveFile(sanitizedFilePath, _processedFolder, logBuilder);
             }
             catch (Exception ex)
             {
                 logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
                 _logger.LogError(ex, $"Error processing file {file}");
 
-                D2_MoveFile(file, errorFolder, logBuilder);
+                // Movimiento de todos los archivos relacionados a la carpeta de error
+                D2_MoveFile(file, _errorFolder, logBuilder);
+                if (convertedFilePath != null && System.IO.File.Exists(convertedFilePath))
+                    D2_MoveFile(convertedFilePath, _errorFolder, logBuilder);
+                if (sanitizedFilePath != null && System.IO.File.Exists(sanitizedFilePath))
+                    D2_MoveFile(sanitizedFilePath, _errorFolder, logBuilder);
+
+                await D2_WriteLog(logBuilder.ToString(), logPath);
+                throw;
             }
         }
 
@@ -167,106 +206,46 @@ public class D2_Saldos_Contables_Controller : Controller
         _logger.LogInformation("Historic process completed.");
         await D2_WriteLog(logBuilder.ToString(), logPath);
 
-        var historicLogsFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC LOGS";
-        D2_MoveLogToHistoric(logPath, historicLogsFolder);
+        // Movimiento del log finalizado a la carpeta histórica de logs
+        D2_MoveLogToHistoric(logPath, _historicLogsFolder);
 
         return Ok("Historic files processed successfully.");
     }
 
     private async Task D2_BulkInsertToStage(string csvFilePath, StringBuilder logBuilder)
-        {
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var transaction = await connection.BeginTransactionAsync())
-                {
-                    try
-                    {
-                        var truncateCommand = new MySqlCommand("TRUNCATE TABLE D2_Stage_Saldos_Contables;", connection, transaction);
-                        await truncateCommand.ExecuteNonQueryAsync();
-                        logBuilder.AppendLine("Truncated table D2_Stage_Saldos_Contables.");
-
-                        var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
-                                              "INTO TABLE D2_Stage_Saldos_Contables " +
-                                              "FIELDS TERMINATED BY ',' " +
-                                              "ENCLOSED BY '\"' " +
-                                              "LINES TERMINATED BY '\\n' " +
-                                              "IGNORE 1 LINES;";
-                        var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
-                        await loadCommand.ExecuteNonQueryAsync();
-                        logBuilder.AppendLine("Bulk inserted data into D2_Stage_Saldos_Contables.");
-
-                        await transaction.CommitAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        await transaction.RollbackAsync();
-                        logBuilder.AppendLine($"Error during bulk insert: {ex.Message}");
-                        _logger.LogError(ex, "Error during bulk insert.");
-                        throw;
-                    }
-                }
-            }
-        }
-
-    private void D2_MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder)
-        {
-            try
-            {
-                if (!Directory.Exists(destinationFolder))
-                {
-                    Directory.CreateDirectory(destinationFolder);
-                }
-
-                var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
-                if (System.IO.File.Exists(destinationFilePath))
-                {
-                    System.IO.File.Delete(destinationFilePath);
-                }
-
-                System.IO.File.Move(sourceFilePath, destinationFilePath);
-                logBuilder.AppendLine($"File moved: {sourceFilePath} -> {destinationFilePath}");
-                _logger.LogInformation($"File moved: {sourceFilePath} -> {destinationFilePath}");
-            }
-            catch (Exception ex)
-            {
-                logBuilder.AppendLine($"Error moving file {sourceFilePath} to {destinationFolder}: {ex.Message}");
-                _logger.LogError(ex, $"Error moving file {sourceFilePath} to {destinationFolder}");
-            }
-        }
-
-    private void D2_MoveLogToHistoric(string logPath, string historicLogsFolder)
-        {
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
-            var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
-
-            if (!Directory.Exists(historicLogsFolder))
-            {
-                Directory.CreateDirectory(historicLogsFolder);
-            }
-
-            System.IO.File.Move(logPath, destinationFilePath);
-            _logger.LogInformation($"Moved log file to historic folder: {destinationFilePath}");
-        }
-
-    private string D2_ConvertToUTF8WithBOM(string filePath)
     {
-        var newFilePath = Path.Combine(
-            Path.GetDirectoryName(filePath)!,
-            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
-        );
-
-        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
-        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+        using (var connection = new MySqlConnection(_connectionString))
         {
-            while (!reader.EndOfStream)
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
             {
-                writer.WriteLine(reader.ReadLine());
+                try
+                {
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D2_Stage_Saldos_Contables;", connection, transaction);
+                    await truncateCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Truncated table D2_Stage_Saldos_Contables.");
+
+                    var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
+                                          "INTO TABLE D2_Stage_Saldos_Contables " +
+                                          "FIELDS TERMINATED BY ',' " +
+                                          "ENCLOSED BY '\"' " +
+                                          "LINES TERMINATED BY '\\n' " +
+                                          "IGNORE 1 LINES;";
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    await loadCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine("Bulk inserted data into D2_Stage_Saldos_Contables.");
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    logBuilder.AppendLine($"Error during bulk insert: {ex.Message}");
+                    _logger.LogError(ex, "Error during bulk insert.");
+                    throw;
+                }
             }
         }
-
-        return newFilePath;
     }
 
     private async Task D2_InsertToFinalTable(StringBuilder logBuilder)
@@ -274,13 +253,15 @@ public class D2_Saldos_Contables_Controller : Controller
         var sqlInsertCommand = @"
             INSERT INTO D2_Saldos_Contables (
                 Id_Credito, Referencia, Nombre, Id_Sucursal, Sucursal, Id_Convenio, Convenio, Financiamiento,
-                Estatus_Inicial, Estatus_Final, Fecha_Apertura, Fecha_Terminacion, Importe, Dias_Atraso, Cuotas_Atrasadas,
-                Periodos_Atraso, Pagos_Sostenidos, Pago, Frecuencia, Fecha_Ultimo_Pago, Importe_Ultimo_Pago,
-                Saldo_Inicial_Capital, Otorgado, Pagos, Ajuste_Cargo_Capital, Ajuste_Abono_Capital, Saldo_Final_Capital,
-                Calculo, Diferencia, Capital_Vigente, Capital_Vencido, Saldo_Inicial_Interes, Devengamiento, Pagos_Interes,
-                Ajuste_Cargo_Interes, Ajuste_Abono_Interes, Interes_No_Devengado, Saldo_Final_Interes, Calculo_Interes,
-                Diferencia_Interes, Interes_Devengado, IVA_Interes_Devengado, Interes_No_DevengadoB, Fecha_Cartera_Vencida,
-                Saldo_Contable, Saldo_Insoluto, Porc_Provision, Reserva, nCAT, vOpTable, Status, FechaGenerado
+                Estatus_Inicial, Estatus_Final, Fecha_Apertura, Fecha_Terminacion, Importe, Dias_Atraso, 
+                Cuotas_Atrasadas, Periodos_Atraso, Pagos_Sostenidos, Pago, Frecuencia, Fecha_Ultimo_Pago, 
+                Importe_Ultimo_Pago, Saldo_Inicial_Capital, Otorgado, Pagos, Ajuste_Cargo_Capital, 
+                Ajuste_Abono_Capital, Saldo_Final_Capital, Calculo, Diferencia, Capital_Vigente, 
+                Capital_Vencido, Saldo_Inicial_Interes, Devengamiento, Pagos_Interes, Ajuste_Cargo_Interes, 
+                Ajuste_Abono_Interes, Interes_No_Devengado, Saldo_Final_Interes, Calculo_Interes, 
+                Diferencia_Interes, Interes_Devengado, IVA_Interes_Devengado, Interes_No_DevengadoB, 
+                Fecha_Cartera_Vencida, Saldo_Contable, Saldo_Insoluto, Porc_Provision, Reserva, 
+                nCAT, vOpTable, Status, FechaGenerado
             )
             SELECT 
                 Id_Credito, Referencia, Nombre, Id_Sucursal, Sucursal, Id_Convenio, Convenio, Financiamiento,
@@ -289,11 +270,11 @@ public class D2_Saldos_Contables_Controller : Controller
                 STR_TO_DATE(NULLIF(Fecha_Terminacion, ''), '%d/%m/%Y') AS Fecha_Terminacion,
                 Importe, Dias_Atraso, Cuotas_Atrasadas, Periodos_Atraso, Pagos_Sostenidos, Pago, Frecuencia,
                 STR_TO_DATE(NULLIF(Fecha_Ultimo_Pago, ''), '%d/%m/%Y') AS Fecha_Ultimo_Pago,
-                Importe_Ultimo_Pago, Saldo_Inicial_Capital, Otorgado, Pagos, Ajuste_Cargo_Capital, Ajuste_Abono_Capital,
-                Saldo_Final_Capital, Calculo, Diferencia, Capital_Vigente, Capital_Vencido, Saldo_Inicial_Interes,
-                Devengamiento, Pagos_Interes, Ajuste_Cargo_Interes, Ajuste_Abono_Interes, Interes_No_Devengado,
-                Saldo_Final_Interes, Calculo_Interes, Diferencia_Interes, Interes_Devengado, IVA_Interes_Devengado,
-                Interes_No_DevengadoB,
+                Importe_Ultimo_Pago, Saldo_Inicial_Capital, Otorgado, Pagos, Ajuste_Cargo_Capital, 
+                Ajuste_Abono_Capital, Saldo_Final_Capital, Calculo, Diferencia, Capital_Vigente, 
+                Capital_Vencido, Saldo_Inicial_Interes, Devengamiento, Pagos_Interes, Ajuste_Cargo_Interes, 
+                Ajuste_Abono_Interes, Interes_No_Devengado, Saldo_Final_Interes, Calculo_Interes, 
+                Diferencia_Interes, Interes_Devengado, IVA_Interes_Devengado, Interes_No_DevengadoB, 
                 STR_TO_DATE(NULLIF(Fecha_Cartera_Vencida, ''), '%d/%m/%Y') AS Fecha_Cartera_Vencida,
                 Saldo_Contable, Saldo_Insoluto, Porc_Provision, Reserva, nCAT, vOpTable, Status, NOW() AS FechaGenerado
             FROM D2_Stage_Saldos_Contables;";
@@ -402,6 +383,25 @@ public class D2_Saldos_Contables_Controller : Controller
         }
     }
 
+    private string D2_ConvertToUTF8WithBOM(string filePath)
+    {
+        var newFilePath = Path.Combine(
+            Path.GetDirectoryName(filePath)!,
+            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
+        );
+
+        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
+        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+        {
+            while (!reader.EndOfStream)
+            {
+                writer.WriteLine(reader.ReadLine());
+            }
+        }
+
+        return newFilePath;
+    }
+
     private string D2_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
     {
         var sanitizedFilePath = Path.Combine(
@@ -419,7 +419,7 @@ public class D2_Saldos_Contables_Controller : Controller
 
                 while ((line = reader.ReadLine()) != null)
                 {
-                    // Write header row without validation
+                    // Escribir la cabecera sin validación
                     if (!headerProcessed)
                     {
                         writer.WriteLine(line);
@@ -427,7 +427,6 @@ public class D2_Saldos_Contables_Controller : Controller
                         continue;
                     }
 
-                    // Split the line and validate
                     var columns = line.Split(',');
                     if (columns[0].Trim() == "0" || string.IsNullOrWhiteSpace(columns[0]))
                     {
@@ -449,5 +448,71 @@ public class D2_Saldos_Contables_Controller : Controller
         }
 
         return sanitizedFilePath;
+    }
+
+    private void D2_MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder)
+    {
+        try
+        {
+            if (!Directory.Exists(destinationFolder))
+            {
+                Directory.CreateDirectory(destinationFolder);
+            }
+
+            var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
+            if (System.IO.File.Exists(destinationFilePath))
+            {
+                System.IO.File.Delete(destinationFilePath);
+            }
+
+            System.IO.File.Move(sourceFilePath, destinationFilePath);
+            logBuilder.AppendLine($"File moved: {sourceFilePath} -> {destinationFilePath}");
+            _logger.LogInformation($"File moved: {sourceFilePath} -> {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error moving file {sourceFilePath} to {destinationFolder}: {ex.Message}");
+            _logger.LogError(ex, $"Error moving file {sourceFilePath} to {destinationFolder}");
+        }
+    }
+
+    private void D2_MoveLogToHistoric(string logPath, string historicLogsFolder)
+    {
+        try
+        {
+            if (!Directory.Exists(historicLogsFolder))
+            {
+                Directory.CreateDirectory(historicLogsFolder);
+            }
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
+            var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
+            System.IO.File.Move(logPath, destinationFilePath);
+            _logger.LogInformation($"Moved log file to historic folder: {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error moving log file to historic folder: {ex.Message}");
+        }
+    }
+
+    private void MoveExistingLog(string logPath, string historicLogsFolder)
+    {
+        try
+        {
+            if (!Directory.Exists(historicLogsFolder))
+            {
+                Directory.CreateDirectory(historicLogsFolder);
+            }
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var destinationFilePath = Path.Combine(historicLogsFolder,
+                Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath));
+            System.IO.File.Move(logPath, destinationFilePath);
+            _logger.LogInformation($"Existing log moved to historic folder: {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error moving existing log file: {ex.Message}");
+        }
     }
 }

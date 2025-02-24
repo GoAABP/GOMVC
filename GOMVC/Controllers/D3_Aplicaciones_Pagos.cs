@@ -12,29 +12,45 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
     private readonly ILogger<D3_Aplicaciones_Pagos_Controller> _logger;
     private readonly IConfiguration _configuration;
     private readonly string _connectionString;
+    
+    // Directorios base
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
+    private readonly string _logsFolder = @"C:\Users\Go Credit\Documents\DATA\LOGS";
+    private readonly string _historicLogsFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC LOGS";
+    
+    // Carpetas de movimiento dentro de Historic Files
+    private readonly string _archiveFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Archive";
+    private readonly string _processedFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Processed";
+    private readonly string _errorFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Error";
+
+    // Nombre dinámico del log
+    private readonly string _logFileName;
 
     public D3_Aplicaciones_Pagos_Controller(ILogger<D3_Aplicaciones_Pagos_Controller> logger, IConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Handle special characters
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+        // Se genera el nombre del log usando el nombre del controlador
+        _logFileName = $"{nameof(D3_Aplicaciones_Pagos_Controller)}.log";
+        var logPath = Path.Combine(_logsFolder, _logFileName);
+        // Si ya existe un log, se mueve a la carpeta de logs históricos
+        if (System.IO.File.Exists(logPath))
+        {
+            MoveExistingLog(logPath, _historicLogsFolder);
+        }
     }
 
     public async Task<IActionResult> D3_ProcessAplicacionPagos()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D3_Aplicaciones_Pagos.log";
-        var archiveFolder = @"C:\Users\Go Credit\Documents\DATA\ARCHIVE";
-        var processedFolder = @"C:\Users\Go Credit\Documents\DATA\PROCESSED";
-        var errorFolder = @"C:\Users\Go Credit\Documents\DATA\ERROR";
+        var logPath = Path.Combine(_logsFolder, _logFileName);
         var logBuilder = new StringBuilder();
-        var hasErrors = false;
-
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D3 process started.");
         _logger.LogInformation("D3 process started.");
 
-        // Get relevant files
+        // Obtener archivos según el patrón
         var files = Directory.GetFiles(_filePath, "Aplicacion de pagos por fecha de Aplica*.csv");
         if (files.Length == 0)
         {
@@ -47,27 +63,33 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
 
         foreach (var file in files)
         {
+            // Variables para rutas de archivos derivados
+            string? convertedFilePath = null;
+            string? sanitizedFilePath = null;
             logBuilder.AppendLine($"Processing file: {file}");
+
             try
             {
-                // File Conversion to UTF-8 with BOM
-                var convertedFilePath = D3_ConvertToUTF8WithBOM(file);
+                // Conversión a UTF-8 con BOM
+                convertedFilePath = D3_ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                // Preprocessing: Stopper and sanitization
-                var sanitizedFilePath = D3_PreprocessCsvFile(convertedFilePath, logBuilder);
+                // Preprocesamiento: stopper y sanitización
+                sanitizedFilePath = D3_PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
-                // Load data into staging table
+                // Carga de datos a la tabla de staging
                 await D3_LoadDataToStage(sanitizedFilePath, logBuilder);
 
-                // Insert validated data into the final table
+                // Inserción de datos validados a la tabla final
                 await D3_InsertValidatedData(logBuilder);
 
-                // Move files to the archive and processed folders
-                D3_MoveFile(file, archiveFolder);
-                D3_MoveFile(convertedFilePath, processedFolder);
-                D3_MoveFile(sanitizedFilePath, processedFolder);
+                // Movimiento de archivos en caso de éxito
+                D3_MoveFile(file, _archiveFolder);
+                if (convertedFilePath != null)
+                    D3_MoveFile(convertedFilePath, _processedFolder);
+                if (sanitizedFilePath != null)
+                    D3_MoveFile(sanitizedFilePath, _processedFolder);
 
                 logBuilder.AppendLine($"File {file} processed successfully.");
             }
@@ -75,10 +97,17 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
                 _logger.LogError(ex, $"Error processing file {file}");
-                hasErrors = true;
 
-                // Move problematic files to error folder
-                D3_MoveFile(file, errorFolder);
+                // Movimiento de archivos relacionados a la carpeta de error
+                D3_MoveFile(file, _errorFolder);
+                if (convertedFilePath != null && System.IO.File.Exists(convertedFilePath))
+                    D3_MoveFile(convertedFilePath, _errorFolder);
+                if (sanitizedFilePath != null && System.IO.File.Exists(sanitizedFilePath))
+                    D3_MoveFile(sanitizedFilePath, _errorFolder);
+
+                await D3_WriteLog(logBuilder.ToString(), logPath);
+                // Lanzar la excepción para indicar fallo en el proceso
+                throw;
             }
         }
 
@@ -86,10 +115,29 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         _logger.LogInformation("D3 process completed.");
         await D3_WriteLog(logBuilder.ToString(), logPath);
 
-        // Finalize response based on errors
-        return hasErrors
-            ? StatusCode(500, "D3 process completed with errors. Check the log for details.")
-            : Ok("D3 process completed successfully.");
+        // Mover el log final a la carpeta de logs históricos
+        D3_MoveLogToHistoric(logPath, _historicLogsFolder);
+
+        return Ok("D3 process completed successfully.");
+    }
+
+    private string D3_ConvertToUTF8WithBOM(string filePath)
+    {
+        var newFilePath = Path.Combine(
+            Path.GetDirectoryName(filePath)!,
+            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
+        );
+
+        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
+        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+        {
+            while (!reader.EndOfStream)
+            {
+                writer.WriteLine(reader.ReadLine());
+            }
+        }
+
+        return newFilePath;
     }
 
     private string D3_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
@@ -109,7 +157,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
 
                 while ((line = reader.ReadLine()) != null)
                 {
-                    // Write header row without validation
+                    // Escribir la cabecera sin validación
                     if (!headerProcessed)
                     {
                         writer.WriteLine(line);
@@ -117,7 +165,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                         continue;
                     }
 
-                    // Check for stopper in the first column
+                    // Verificar stopper: si la primera columna es "0", detener el procesamiento
                     var columns = line.Split(',');
                     if (columns[0].Trim() == "0")
                     {
@@ -140,25 +188,6 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         return sanitizedFilePath;
     }
 
-    private string D3_ConvertToUTF8WithBOM(string filePath)
-    {
-        var newFilePath = Path.Combine(
-            Path.GetDirectoryName(filePath)!,
-            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
-        );
-
-        using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
-        using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
-        {
-            while (!reader.EndOfStream)
-            {
-                writer.WriteLine(reader.ReadLine());
-            }
-        }
-
-        return newFilePath;
-    }
-
     private async Task D3_LoadDataToStage(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
@@ -168,12 +197,12 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 try
                 {
-                    // Truncate staging table
+                    // Truncar la tabla de staging
                     var truncateCommand = new MySqlCommand("TRUNCATE TABLE D3_Stage_Aplicacion_Pagos;", connection, transaction);
                     await truncateCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Truncated table D3_Stage_Aplicacion_Pagos.");
 
-                    // Load data into staging table
+                    // Cargar datos a la tabla de staging
                     var loadCommandText = "LOAD DATA LOCAL INFILE '" +
                         csvFilePath.Replace("\\", "\\\\") +
                         "' INTO TABLE D3_Stage_Aplicacion_Pagos " +
@@ -181,7 +210,6 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                         "ENCLOSED BY '\"' " +
                         "LINES TERMINATED BY '\\n' " +
                         "IGNORE 1 LINES;";
-
                     var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
                     await loadCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Loaded data into D3_Stage_Aplicacion_Pagos.");
@@ -215,9 +243,10 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                 STR_TO_DATE(NULLIF(Fecha_Pago, ''), '%d/%m/%Y') AS Fecha_Pago,
                 STR_TO_DATE(NULLIF(Fecha_Aplicacion, ''), '%d/%m/%Y') AS Fecha_Aplicacion,
                 STR_TO_DATE(NULLIF(Fecha_Deposito, ''), '%d/%m/%Y') AS Fecha_Deposito,
-                Status, Pago, Capital, Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, Moratorios, IVA_Mora, 
-                Pago_Tardio, IVA_PagoTardio, Recuperacion, IVA_Recup, Com_Liquidacion, IVA_Com_Liquidacion, 
-                Retencion_X_Admon, IVA_Retencion_X_Admon, Pago_Exceso, Gestor, Forma_de_pago, vMotive
+                Status, Pago, Capital, Interes, IVA_Int, Comision_Financiada, IVA_Comision_Financ, 
+                Moratorios, IVA_Mora, Pago_Tardio, IVA_PagoTardio, Recuperacion, IVA_Recup, 
+                Com_Liquidacion, IVA_Com_Liquidacion, Retencion_X_Admon, IVA_Retencion_X_Admon, 
+                Pago_Exceso, Gestor, Forma_de_pago, vMotive
             FROM D3_Stage_Aplicacion_Pagos
             WHERE NOT EXISTS (
                 SELECT 1 FROM D3_Aplicacion_Pagos WHERE D3_Aplicacion_Pagos.Id_Pago = D3_Stage_Aplicacion_Pagos.Id_Pago
@@ -258,7 +287,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
             if (System.IO.File.Exists(destinationFilePath))
             {
-                System.IO.File.Delete(destinationFilePath); // Overwrite existing file
+                System.IO.File.Delete(destinationFilePath);
             }
 
             System.IO.File.Move(sourceFilePath, destinationFilePath);
@@ -275,9 +304,10 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
     {
         try
         {
-            if (!Directory.Exists(Path.GetDirectoryName(logPath)))
+            var directory = Path.GetDirectoryName(logPath);
+            if (!Directory.Exists(directory))
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                Directory.CreateDirectory(directory!);
             }
 
             await System.IO.File.WriteAllTextAsync(logPath, content);
@@ -316,6 +346,26 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         {
             _logger.LogError(ex, "Failed to move log file to historic logs.");
             throw;
+        }
+    }
+
+    private void MoveExistingLog(string logPath, string historicLogsFolder)
+    {
+        try
+        {
+            if (!Directory.Exists(historicLogsFolder))
+            {
+                Directory.CreateDirectory(historicLogsFolder);
+            }
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var destinationFilePath = Path.Combine(historicLogsFolder,
+                Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath));
+            System.IO.File.Move(logPath, destinationFilePath);
+            _logger.LogInformation($"Existing log moved to historic folder: {destinationFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error moving existing log file: {ex.Message}");
         }
     }
 }

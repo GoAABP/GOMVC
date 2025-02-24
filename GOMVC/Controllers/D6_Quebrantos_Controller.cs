@@ -3,7 +3,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MySql.Data.MySqlClient;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -13,21 +15,24 @@ public class D6_Quebrantos_Controller : Controller
     private readonly ILogger<D6_Quebrantos_Controller> _logger;
     private readonly IConfiguration _configuration;
     private readonly string _connectionString;
+
+    // Directorios base
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
     private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
+    private readonly string _logsFolder = @"C:\Users\Go Credit\Documents\DATA\LOGS";
 
     public D6_Quebrantos_Controller(ILogger<D6_Quebrantos_Controller> logger, IConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); // Handle special characters
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
     [HttpPost]
     public async Task<IActionResult> D6_ProcessQuebrantos()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Quebrantos.log";
+        var logPath = Path.Combine(_logsFolder, "D6_Quebrantos.log");
         var logBuilder = new StringBuilder();
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D6 process started.");
         _logger.LogInformation("D6 process started.");
@@ -49,12 +54,14 @@ public class D6_Quebrantos_Controller : Controller
         foreach (var file in files)
         {
             logBuilder.AppendLine($"Processing file: {file}");
+            string convertedFilePath = null;
+            string sanitizedFilePath = null;
             try
             {
-                var convertedFilePath = D6_ConvertToUTF8WithBOM(file);
+                convertedFilePath = D6_ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                var sanitizedFilePath = D6_PreprocessCsvFile(convertedFilePath, logBuilder);
+                sanitizedFilePath = D6_PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
                 await D6_BulkInsertToStage(sanitizedFilePath, logBuilder);
@@ -80,43 +87,63 @@ public class D6_Quebrantos_Controller : Controller
         return Ok("D6 files processed successfully.");
     }
 
+    private string D6_ConvertToUTF8WithBOM(string filePath)
+    {
+        var newFilePath = Path.Combine(
+            Path.GetDirectoryName(filePath)!,
+            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
+        );
+        try
+        {
+            using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
+            using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
+            {
+                while (!reader.EndOfStream)
+                {
+                    writer.WriteLine(reader.ReadLine());
+                }
+            }
+            _logger.LogInformation($"File successfully converted to UTF-8 with BOM: {newFilePath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error converting file to UTF-8 with BOM: {filePath}");
+            throw;
+        }
+        return newFilePath;
+    }
+
     private string D6_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
     {
         var sanitizedFilePath = Path.Combine(
             Path.GetDirectoryName(inputFilePath)!,
             Path.GetFileNameWithoutExtension(inputFilePath) + "_sanitized.csv"
         );
-
         try
         {
             using (var reader = new StreamReader(inputFilePath))
             using (var writer = new StreamWriter(sanitizedFilePath))
             {
-                string? line;
+                string line;
                 bool headerProcessed = false;
-
                 while ((line = reader.ReadLine()) != null)
                 {
                     if (!headerProcessed)
                     {
-                        writer.WriteLine(line); // Write the header row as-is
+                        writer.WriteLine(line);
                         headerProcessed = true;
                         continue;
                     }
 
                     var columns = line.Split(',');
-
-                    // Stop processing if the stopper is found in the first column
                     if (columns[0].Trim() == "999999999")
                     {
                         logBuilder.AppendLine("Stopper '999999999' found in the first column. Stopping further processing.");
                         break;
                     }
-
                     writer.WriteLine(line);
                 }
             }
-
             logBuilder.AppendLine($"File sanitized successfully: {sanitizedFilePath}");
         }
         catch (Exception ex)
@@ -124,7 +151,6 @@ public class D6_Quebrantos_Controller : Controller
             logBuilder.AppendLine($"Error during file sanitization: {ex.Message}");
             throw;
         }
-
         return sanitizedFilePath;
     }
 
@@ -137,19 +163,16 @@ public class D6_Quebrantos_Controller : Controller
             {
                 try
                 {
-                    // Truncate the staging table
                     var truncateCommand = new MySqlCommand("TRUNCATE TABLE D6_Stage_Quebrantos;", connection, transaction);
                     await truncateCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Truncated table D6_Stage_Quebrantos.");
 
-                    // Bulk insert into staging table
                     var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
-                                        "INTO TABLE D6_Stage_Quebrantos " +
-                                        "FIELDS TERMINATED BY ',' " +
-                                        "ENCLOSED BY '\"' " +
-                                        "LINES TERMINATED BY '\\n' " +
-                                        "IGNORE 1 LINES;";
-
+                                            "INTO TABLE D6_Stage_Quebrantos " +
+                                            "FIELDS TERMINATED BY ',' " +
+                                            "ENCLOSED BY '\"' " +
+                                            "LINES TERMINATED BY '\\n' " +
+                                            "IGNORE 1 LINES;";
                     var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
                     await loadCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Bulk inserted data into D6_Stage_Quebrantos.");
@@ -196,7 +219,6 @@ public class D6_Quebrantos_Controller : Controller
                 {
                     var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
                     var rowsAffected = await command.ExecuteNonQueryAsync();
-
                     logBuilder.AppendLine($"Inserted {rowsAffected} rows into D6_Quebrantos.");
                     await transaction.CommitAsync();
                 }
@@ -219,13 +241,11 @@ public class D6_Quebrantos_Controller : Controller
             {
                 Directory.CreateDirectory(destinationFolder);
             }
-
             var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
             if (System.IO.File.Exists(destinationFilePath))
             {
-                System.IO.File.Delete(destinationFilePath); // Overwrite existing file
+                System.IO.File.Delete(destinationFilePath);
             }
-
             System.IO.File.Move(sourceFilePath, destinationFilePath);
             logBuilder.AppendLine($"Moved file: {sourceFilePath} -> {destinationFilePath}");
             _logger.LogInformation($"Moved file: {sourceFilePath} -> {destinationFilePath}");
@@ -241,11 +261,11 @@ public class D6_Quebrantos_Controller : Controller
     {
         try
         {
-            if (!Directory.Exists(Path.GetDirectoryName(logPath)))
+            var directory = Path.GetDirectoryName(logPath);
+            if (!Directory.Exists(directory))
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                Directory.CreateDirectory(directory!);
             }
-
             await System.IO.File.WriteAllTextAsync(logPath, content);
             _logger.LogInformation($"Log written to: {logPath}");
         }
@@ -265,16 +285,13 @@ public class D6_Quebrantos_Controller : Controller
                 _logger.LogWarning($"Log file does not exist: {logPath}");
                 return;
             }
-
             if (!Directory.Exists(historicLogsFolder))
             {
                 Directory.CreateDirectory(historicLogsFolder);
             }
-
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
             var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
-
             System.IO.File.Move(logPath, destinationFilePath);
             _logger.LogInformation($"Log file moved to historic folder: {destinationFilePath}");
         }
@@ -288,7 +305,7 @@ public class D6_Quebrantos_Controller : Controller
     [HttpPost]
     public async Task<IActionResult> D6_ProcessHistoricQuebrantos()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D6_Historic_Quebrantos.log";
+        var logPath = Path.Combine(_logsFolder, "D6_Historic_Quebrantos.log");
         var logBuilder = new StringBuilder();
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process started.");
         _logger.LogInformation("Historic process started.");
@@ -310,12 +327,10 @@ public class D6_Quebrantos_Controller : Controller
         foreach (var file in files)
         {
             logBuilder.AppendLine($"Processing file: {file}");
-
             try
             {
                 var fileName = Path.GetFileNameWithoutExtension(file);
                 var match = Regex.Match(fileName, @"Quebrantos datos Cobranza_(\d{2})(\d{2})(\d{4})");
-
                 if (!match.Success)
                 {
                     var errorLog = $"Invalid file name format: {fileName}";
@@ -324,12 +339,10 @@ public class D6_Quebrantos_Controller : Controller
                     D6_MoveFile(file, errorFolder, logBuilder);
                     continue;
                 }
-
                 var day = int.Parse(match.Groups[1].Value);
                 var month = int.Parse(match.Groups[2].Value);
                 var year = int.Parse(match.Groups[3].Value);
                 var fechaGenerado = new DateTime(year, month, day);
-
                 logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
 
                 var convertedFilePath = D6_ConvertToUTF8WithBOM(file);
@@ -391,7 +404,6 @@ public class D6_Quebrantos_Controller : Controller
                     var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
                     command.Parameters.AddWithValue("@FechaGenerado", fechaGenerado);
                     var rowsAffected = await command.ExecuteNonQueryAsync();
-
                     logBuilder.AppendLine($"Inserted {rowsAffected} rows into D6_Quebrantos.");
                     await transaction.CommitAsync();
                 }
@@ -406,83 +418,6 @@ public class D6_Quebrantos_Controller : Controller
         }
     }
 
-    private void D6_ValidateFile(string filePath, StringBuilder logBuilder)
-    {
-        try
-        {
-            using (var reader = new StreamReader(filePath, Encoding.UTF8))
-            {
-                int lineNumber = 0;
-                while (!reader.EndOfStream)
-                {
-                    string? line = reader.ReadLine();
-                    lineNumber++;
-
-                    if (string.IsNullOrWhiteSpace(line))
-                    {
-                        logBuilder.AppendLine($"Warning: Empty line found at line {lineNumber}.");
-                        continue;
-                    }
-
-                    if (line.Contains("�"))
-                    {
-                        logBuilder.AppendLine($"Warning: Invalid character found at line {lineNumber}: {line}");
-                    }
-
-                    var columns = line.Split(',');
-                    if (columns.Length < 10) // Example: Check for at least 10 columns
-                    {
-                        logBuilder.AppendLine($"Error: Insufficient columns at line {lineNumber}: {line}");
-                        throw new InvalidDataException($"Invalid data structure in file: {filePath}");
-                    }
-                }
-            }
-
-            logBuilder.AppendLine("File validation completed successfully.");
-        }
-        catch (Exception ex)
-        {
-            logBuilder.AppendLine($"Error during file validation: {ex.Message}");
-            throw;
-        }
-    }
-
-    private void D6_LogStep(string message, StringBuilder logBuilder)
-    {
-        var timestampedMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}";
-        logBuilder.AppendLine(timestampedMessage);
-        _logger.LogInformation(timestampedMessage);
-    }
-
-    private string D6_ConvertToUTF8WithBOM(string filePath)
-    {
-        var newFilePath = Path.Combine(
-            Path.GetDirectoryName(filePath)!,
-            Path.GetFileNameWithoutExtension(filePath) + "_utf8" + Path.GetExtension(filePath)
-        );
-
-        try
-        {
-            using (var reader = new StreamReader(filePath, Encoding.GetEncoding("Windows-1252")))
-            using (var writer = new StreamWriter(newFilePath, false, new UTF8Encoding(true)))
-            {
-                while (!reader.EndOfStream)
-                {
-                    writer.WriteLine(reader.ReadLine());
-                }
-            }
-
-            _logger.LogInformation($"File successfully converted to UTF-8 with BOM: {newFilePath}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error converting file to UTF-8 with BOM: {filePath}");
-            throw;
-        }
-
-        return newFilePath;
-    }
-
     [HttpPost]
     public async Task<IActionResult> D6_ProcessQuebrantosCalculationsAndExport()
     {
@@ -492,7 +427,7 @@ public class D6_Quebrantos_Controller : Controller
 
         try
         {
-            // Step 1: Perform the Quebrantos Calculation
+            // Step 1: Perform the Quebrantos Calculation (insert into R1_Quebrantos_Calculado)
             logBuilder.AppendLine("Executing Quebrantos calculations...");
             await D6_CalculateQuebrantos(logBuilder);
             logBuilder.AppendLine("Quebrantos calculations completed successfully.");
@@ -500,13 +435,11 @@ public class D6_Quebrantos_Controller : Controller
             // Step 2: Export the most recent data to CSV
             logBuilder.AppendLine("Executing export to CSV...");
             var exportResult = await D6_ExportQuebrantosToCSV();
-            
-            // Append export result to logs
             logBuilder.AppendLine($"Export result: {exportResult}");
 
             logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
             _logger.LogInformation("Quebrantos Calculation & Export process completed.");
-            
+
             return Ok("Quebrantos calculation and export completed successfully.");
         }
         catch (Exception ex)
@@ -517,12 +450,96 @@ public class D6_Quebrantos_Controller : Controller
         }
     }
 
+    private async Task<IActionResult> D6_ExportQuebrantosToCSV()
+    {
+        var logBuilder = new StringBuilder();
+        var exportFolderPath = @"C:\Users\Go Credit\Documents\DATA\EXPORTS";
+        var mostRecentDateQuery = "SELECT MAX(Fecha_Generado) FROM R1_Quebrantos_Calculado;";
+        
+        try
+        {
+            if (!Directory.Exists(exportFolderPath))
+            {
+                Directory.CreateDirectory(exportFolderPath);
+            }
+
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                DateTime mostRecentDate;
+                using (var cmd = new MySqlCommand(mostRecentDateQuery, connection))
+                {
+                    var result = await cmd.ExecuteScalarAsync();
+                    if (result == null || result == DBNull.Value)
+                    {
+                        logBuilder.AppendLine("No data found in R1_Quebrantos_Calculado.");
+                        return new NotFoundObjectResult("No data available for export.");
+                    }
+                    mostRecentDate = Convert.ToDateTime(result);
+                }
+
+                logBuilder.AppendLine($"Exporting data for most recent Fecha_Generado: {mostRecentDate:yyyy-MM-dd HH:mm:ss}");
+
+                var sqlQuery = @"
+                    SELECT * 
+                    FROM R1_Quebrantos_Calculado
+                    WHERE Fecha_Generado = @MostRecentDate;";
+
+                using (var command = new MySqlCommand(sqlQuery, connection))
+                {
+                    command.Parameters.AddWithValue("@MostRecentDate", mostRecentDate);
+                    
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        if (!reader.HasRows)
+                        {
+                            logBuilder.AppendLine("No records found for the most recent date.");
+                            return new NotFoundObjectResult("No records to export.");
+                        }
+
+                        var exportFilePath = Path.Combine(exportFolderPath, $"Quebrantos_Export_{mostRecentDate:yyyyMMdd_HHmmss}.csv");
+
+                        using (var writer = new StreamWriter(exportFilePath, false, new UTF8Encoding(true)))
+                        {
+                            // Write header
+                            var columnNames = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName);
+                            await writer.WriteLineAsync(string.Join(",", columnNames));
+
+                            // Write rows
+                            while (await reader.ReadAsync())
+                            {
+                                var row = new List<string>();
+                                for (int i = 0; i < reader.FieldCount; i++)
+                                {
+                                    var value = reader[i]?.ToString() ?? "";
+                                    value = value.Replace("\"", "\"\"");
+                                    row.Add($"\"{value}\"");
+                                }
+                                await writer.WriteLineAsync(string.Join(",", row));
+                            }
+                        }
+
+                        logBuilder.AppendLine($"Export successful: {exportFilePath}");
+                        return new OkObjectResult($"Exported successfully to: {exportFilePath}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logBuilder.AppendLine($"Error exporting data: {ex.Message}");
+            _logger.LogError(ex, "Error exporting R1_Quebrantos_Calculado.");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    // Método que realiza el cálculo e inserción en R1_Quebrantos_Calculado utilizando la nueva estructura y fórmulas
     private async Task D6_CalculateQuebrantos(StringBuilder logBuilder)
     {
         var sqlCommands = @"
             -- Step 1: Drop and recreate the temporary table
             DROP TEMPORARY TABLE IF EXISTS Temp_Latest_Quebrantos;
-
             CREATE TEMPORARY TABLE Temp_Latest_Quebrantos (
                 Operacion INT,
                 Referencia INT,
@@ -554,27 +571,45 @@ public class D6_Quebrantos_Controller : Controller
             -- Step 2: Insert records from D6_Quebrantos where FechaGenerado is the most recent
             INSERT INTO Temp_Latest_Quebrantos
             SELECT 
-                q.Operacion, q.Referencia, q.Nombre, q.Convenio, q.vFinancingtypeid, q.KVigente, q.KVencido, 
-                q.IntVencido, q.IVAIntVencido, q.IntVencidoCO, q.IVAIntVencidoCO, q.TotalQuebranto, 
-                q.PagosRealizados, q.SdoPendiente, q.IntXDevengar, q.SdoTotalXPagar, q.FechaQuebranto, 
-                q.UltPagoTeorico, q.UltimoPago, q.UltPagoApl, q.Gestor, q.nCommission, q.nCommTax, q.vMotive
+                q.Operacion,
+                q.Referencia,
+                q.Nombre,
+                q.Convenio,
+                q.vFinancingtypeid,
+                q.KVigente,
+                q.KVencido,
+                q.IntVencido,
+                q.IVAIntVencido,
+                q.IntVencidoCO,
+                q.IVAIntVencidoCO,
+                q.TotalQuebranto,
+                q.PagosRealizados,
+                q.SdoPendiente,
+                q.IntXDevengar,
+                q.SdoTotalXPagar,
+                q.FechaQuebranto,
+                q.UltPagoTeorico,
+                q.UltimoPago,
+                q.UltPagoApl,
+                q.Gestor,
+                q.nCommission,
+                q.nCommTax,
+                q.vMotive
             FROM D6_Quebrantos q
             JOIN (
                 SELECT Operacion, MAX(FechaGenerado) AS MostRecentFechaGenerado
                 FROM D6_Quebrantos
                 GROUP BY Operacion
             ) lfg 
-            ON q.Operacion = lfg.Operacion 
-            AND q.FechaGenerado = lfg.MostRecentFechaGenerado;
+              ON q.Operacion = lfg.Operacion 
+              AND q.FechaGenerado = lfg.MostRecentFechaGenerado;
 
             -- Drop and recreate Temp_Total_Estrategias
             DROP TEMPORARY TABLE IF EXISTS Temp_Total_Estrategias;
-
             CREATE TEMPORARY TABLE Temp_Total_Estrategias (
                 id_credito INT NOT NULL,
                 total_pagos DECIMAL(18,2) NOT NULL DEFAULT 0
             );
-
             INSERT INTO Temp_Total_Estrategias (id_credito, total_pagos)
             SELECT 
                 d.id_credito,
@@ -583,60 +618,97 @@ public class D6_Quebrantos_Controller : Controller
             INNER JOIN ci1_pagos_estrategia_acumulados c ON d.id_pago = c.id_pago
             GROUP BY d.id_credito;
 
-            -- Insert into R1_Quebrantos_Calculado
+            -- Insert into R1_Quebrantos_Calculado using the new structure and calculations
             INSERT INTO R1_Quebrantos_Calculado (
-                Operacion, Referencia, Nombre, Convenio, vFinancingtypeid, KVigente, KVencido, 
-                IntVencido, IVAIntVencido, IntVencidoCO, IVAIntVencidoCO, TotalQuebranto, 
-                PagosRealizados, SdoPendiente, IntXDevengar, SdoTotalXPagar, FechaQuebranto, 
-                UltPagoTeorico, UltimoPago, UltPagoApl, Gestor, nCommission, nCommTax, 
-                vMotive, TotalEstrategia, SaldoReal, CapitalQuebrantado, Recuperacion, 
-                Month, Year, QuebrantoContable, Producto, Financiamiento, Valid, 
-                SaldoCapital, Motivo, FechaGenerado
+                Operacion, 
+                Referencia, 
+                Nombre, 
+                Convenio, 
+                vFinancing_typeid, 
+                K_Vigente, 
+                K_Vencido, 
+                Int_Vencido, 
+                IVA_Int_Vencido, 
+                Int_Vencido_CO, 
+                IVA_Int_Vencido_CO, 
+                Total_Quebranto, 
+                Pagos_Realizados, 
+                Sdo_Pendiente, 
+                Int_X_Devengar, 
+                Sdo_Total_X_Pagar, 
+                Fecha_Quebranto, 
+                Ult_Pago_Teorico, 
+                Ultimo_Pago, 
+                Ult_Pago_Apl, 
+                Gestor, 
+                nCommission, 
+                nCommTax, 
+                v_Motive, 
+                Total_Estrategia, 
+                Recuperacion, 
+                Quebranto_Pagare, 
+                Saldo_Q_Pagare, 
+                Quebranto_Capital, 
+                Saldo_Q_Capital, 
+                Quebranto_Contable, 
+                Saldo_Q_Contable, 
+                Motivo, 
+                Valid, 
+                Month, 
+                Year, 
+                Producto, 
+                Financiamiento, 
+                Fecha_Generado
             )
             SELECT 
-                t.Operacion, t.Referencia, t.Nombre, t.Convenio, t.vFinancingtypeid, 
-                t.KVigente, t.KVencido, t.IntVencido, t.IVAIntVencido, t.IntVencidoCO, 
-                t.IVAIntVencidoCO, t.TotalQuebranto, t.PagosRealizados, t.SdoPendiente, 
-                t.IntXDevengar, t.SdoTotalXPagar, t.FechaQuebranto, t.UltPagoTeorico, 
-                t.UltimoPago, t.UltPagoApl, t.Gestor, t.nCommission, t.nCommTax, t.vMotive,
-
-                -- Get TotalEstrategia from Temp_Total_Estrategias
-                COALESCE(te.total_pagos, 0) AS TotalEstrategia,
-
-                -- Calculate SaldoReal
-                COALESCE(t.SdoTotalXPagar, 0) + COALESCE(te.total_pagos, 0) AS SaldoReal,
-
-                -- Calculate CapitalQuebrantado
-                COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0) AS CapitalQuebrantado,
-
-                -- Calculate Recuperacion
+                t.Operacion,
+                t.Referencia,
+                t.Nombre,
+                t.Convenio,
+                t.vFinancingtypeid AS vFinancing_typeid,
+                t.KVigente AS K_Vigente,
+                t.KVencido AS K_Vencido,
+                t.IntVencido AS Int_Vencido,
+                t.IVAIntVencido AS IVA_Int_Vencido,
+                t.IntVencidoCO AS Int_Vencido_CO,
+                t.IVAIntVencidoCO AS IVA_Int_Vencido_CO,
+                t.TotalQuebranto AS Total_Quebranto,
+                t.PagosRealizados AS Pagos_Realizados,
+                t.SdoPendiente AS Sdo_Pendiente,
+                t.IntXDevengar AS Int_X_Devengar,
+                t.SdoTotalXPagar AS Sdo_Total_X_Pagar,
+                t.FechaQuebranto AS Fecha_Quebranto,
+                t.UltPagoTeorico AS Ult_Pago_Teorico,
+                t.UltimoPago AS Ultimo_Pago,
+                t.UltPagoApl AS Ult_Pago_Apl,
+                t.Gestor,
+                t.nCommission,
+                t.nCommTax,
+                t.vMotive AS v_Motive,
+                COALESCE(te.total_pagos, 0) AS Total_Estrategia,
                 COALESCE(t.PagosRealizados, 0) - COALESCE(te.total_pagos, 0) AS Recuperacion,
-
-                -- Extract Month and Year from FechaQuebranto
+                (COALESCE(t.SdoTotalXPagar, 0) + COALESCE(te.total_pagos, 0))
+                  + (COALESCE(t.PagosRealizados, 0) - COALESCE(te.total_pagos, 0)) AS Quebranto_Pagare,
+                COALESCE(t.SdoTotalXPagar, 0) + COALESCE(te.total_pagos, 0) AS Saldo_Q_Pagare,
+                COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0) AS Quebranto_Capital,
+                (COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0))
+                  - (COALESCE(t.PagosRealizados, 0) - COALESCE(te.total_pagos, 0)) AS Saldo_Q_Capital,
+                (COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0)
+                  + COALESCE(t.IntVencido, 0) + COALESCE(t.IVAIntVencido, 0)) AS Quebranto_Contable,
+                (COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0)
+                  + COALESCE(t.IntVencido, 0) + COALESCE(t.IVAIntVencido, 0))
+                  - (COALESCE(t.PagosRealizados, 0) - COALESCE(te.total_pagos, 0)) AS Saldo_Q_Contable,
+                NULL AS Motivo,
+                COUNT(*) OVER(PARTITION BY t.Operacion) AS Valid,
                 MONTH(STR_TO_DATE(t.FechaQuebranto, '%Y-%m-%d')) AS Month,
                 YEAR(STR_TO_DATE(t.FechaQuebranto, '%Y-%m-%d')) AS Year,
-
-                -- Calculate QuebrantoContable
-                COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0) + COALESCE(t.IntVencido, 0) + COALESCE(t.IVAIntVencido, 0) AS QuebrantoContable,
-
-                -- Get Producto from c2_financiamiento
                 COALESCE(cf.producto, 'Desconocido') AS Producto,
-
-                -- Financiamiento
                 t.vFinancingtypeid AS Financiamiento,
-
-                -- Count occurrences of Operacion
-                COUNT(*) OVER(PARTITION BY t.Operacion) AS Valid,
-
-                -- Calculate SaldoCapital
-                (COALESCE(t.KVigente, 0) + COALESCE(t.KVencido, 0)) - 
-                (COALESCE(t.PagosRealizados, 0) - COALESCE(te.total_pagos, 0)) AS SaldoCapital,
-
-                NULL AS Motivo,
-                NOW() AS FechaGenerado
+                NOW() AS Fecha_Generado
             FROM Temp_Latest_Quebrantos t
             LEFT JOIN Temp_Total_Estrategias te ON t.Operacion = te.id_credito
-            LEFT JOIN c2_financiamiento cf ON t.vFinancingtypeid = cf.Tipo_Financiamiento;";
+            LEFT JOIN c2_financiamiento cf ON t.vFinancingtypeid = cf.Tipo_Financiamiento;
+        ";
 
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -647,7 +719,6 @@ public class D6_Quebrantos_Controller : Controller
                 {
                     var command = new MySqlCommand(sqlCommands, connection, transaction);
                     await command.ExecuteNonQueryAsync();
-
                     logBuilder.AppendLine("Quebrantos calculations completed successfully.");
                     await transaction.CommitAsync();
                 }
@@ -659,92 +730,6 @@ public class D6_Quebrantos_Controller : Controller
                     throw;
                 }
             }
-        }
-    }
-
-    private async Task<IActionResult> D6_ExportQuebrantosToCSV()
-    {
-        var logBuilder = new StringBuilder();
-        var exportFolderPath = @"C:\Users\Go Credit\Documents\DATA\EXPORTS";
-        var mostRecentDateQuery = "SELECT MAX(FechaGenerado) FROM R1_Quebrantos_Calculado;";
-        
-        try
-        {
-            // Ensure the export folder exists
-            if (!Directory.Exists(exportFolderPath))
-            {
-                Directory.CreateDirectory(exportFolderPath);
-            }
-
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-
-                // Retrieve the most recent FechaGenerado
-                DateTime mostRecentDate;
-                using (var cmd = new MySqlCommand(mostRecentDateQuery, connection))
-                {
-                    var result = await cmd.ExecuteScalarAsync();
-                    if (result == null || result == DBNull.Value)
-                    {
-                        logBuilder.AppendLine("No data found in R1_Quebrantos_Calculado.");
-                        return NotFound("No data available for export.");
-                    }
-                    mostRecentDate = Convert.ToDateTime(result);
-                }
-
-                logBuilder.AppendLine($"Exporting data for most recent FechaGenerado: {mostRecentDate:yyyy-MM-dd HH:mm:ss}");
-
-                var sqlQuery = @"
-                    SELECT * 
-                    FROM R1_Quebrantos_Calculado
-                    WHERE FechaGenerado = @MostRecentDate;";
-
-                using (var command = new MySqlCommand(sqlQuery, connection))
-                {
-                    command.Parameters.AddWithValue("@MostRecentDate", mostRecentDate);
-                    
-                    using (var reader = await command.ExecuteReaderAsync())
-                    {
-                        if (!reader.HasRows)
-                        {
-                            logBuilder.AppendLine("No records found for the most recent date.");
-                            return NotFound("No records to export.");
-                        }
-
-                        var exportFilePath = Path.Combine(exportFolderPath, $"Quebrantos_Export_{mostRecentDate:yyyyMMdd_HHmmss}.csv");
-
-                        using (var writer = new StreamWriter(exportFilePath, false, new UTF8Encoding(true)))
-                        {
-                            // Write headers
-                            var columnNames = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName);
-                            await writer.WriteLineAsync(string.Join(",", columnNames));
-
-                            // Write rows
-                            while (await reader.ReadAsync())
-                            {
-                                var row = new List<string>();
-                                for (int i = 0; i < reader.FieldCount; i++)
-                                {
-                                    var value = reader[i]?.ToString() ?? "";
-                                    value = value.Replace("\"", "\"\""); // Escape double quotes
-                                    row.Add($"\"{value}\"");
-                                }
-                                await writer.WriteLineAsync(string.Join(",", row));
-                            }
-                        }
-
-                        logBuilder.AppendLine($"Export successful: {exportFilePath}");
-                        return Ok($"Exported successfully to: {exportFilePath}");
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            logBuilder.AppendLine($"Error exporting data: {ex.Message}");
-            _logger.LogError(ex, "Error exporting R1_Quebrantos_Calculado.");
-            return StatusCode(500, "Error exporting data.");
         }
     }
 }

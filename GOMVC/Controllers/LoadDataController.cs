@@ -38,6 +38,7 @@ public class LoadDataController : Controller
     {
         var activities = new List<string>
         {
+            "B1_Demograficos",
             "D1_Saldos_Cartera",
             "D1B_Saldos_Cartera",
             "D2_Saldos_Contables",
@@ -69,6 +70,13 @@ public class LoadDataController : Controller
 
             switch (activityName.ToLower())
             {
+                case "b1_demograficos":
+                    var demograficsController = new B1_Demograficos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<B1_Demograficos_Controller>>(),
+                        _configuration);
+                    result = await demograficsController.B1_ProcessDemograficos();
+                    break;
+
                 case "d1_saldos_cartera":
                     var saldosCarteraController = new D1_Saldos_Cartera_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D1_Saldos_Cartera_Controller>>(),

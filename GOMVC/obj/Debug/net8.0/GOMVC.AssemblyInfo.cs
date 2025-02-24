@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GOMVC")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+887c21fb14d440edb239b621fdaa05c78ae9e0a9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c53df1570441fa98b048c5b64f636bb5fc939000")]
 [assembly: System.Reflection.AssemblyProductAttribute("GOMVC")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GOMVC")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

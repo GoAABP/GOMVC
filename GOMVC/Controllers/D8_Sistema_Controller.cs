@@ -27,19 +27,35 @@ public class D8_Sistema_Controller : Controller
     [HttpPost]
     public async Task<IActionResult> D8_ProcessSistema()
     {
-        // Define log file and destination folders
-        var logPath = Path.Combine(@"C:\Users\Go Credit\Documents\DATA\LOGS", "D8_Sistema.log");
-        var archiveFolder = Path.Combine(_historicFilePath, "Archive");
-        var processedFolder = Path.Combine(_historicFilePath, "Processed");
-        var errorFolder = Path.Combine(_historicFilePath, "Error");
+        // Generación dinámica del nombre del log usando el nombre del controlador
+        string controllerName = this.GetType().Name;
+        string logFileName = controllerName + ".log";
+        string logPath = Path.Combine(@"C:\Users\Go Credit\Documents\DATA\LOGS", logFileName);
+
+        // Si ya existe un log con el mismo nombre, moverlo a HISTORIC LOGS
+        string historicLogsFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC LOGS";
+        if (System.IO.File.Exists(logPath))
+        {
+            if (!Directory.Exists(historicLogsFolder))
+                Directory.CreateDirectory(historicLogsFolder);
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string historicLogPath = Path.Combine(historicLogsFolder, controllerName + "_" + timestamp + ".log");
+            System.IO.File.Move(logPath, historicLogPath);
+        }
+
+        // Definición de carpetas destino para archivos según el resultado del proceso
+        string archiveFolder = Path.Combine(_historicFilePath, "Archive");
+        string processedFolder = Path.Combine(_historicFilePath, "Processed");
+        // Para errores se mueve a la carpeta "Error" en HISTORIC FILES
+        string errorFolder = Path.Combine(_historicFilePath, "Error");
 
         var logBuilder = new StringBuilder();
         bool hasErrors = false;
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D8 process started.");
-        _logger.LogInformation("D8 process started.");
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {controllerName} process started.");
+        _logger.LogInformation("Process started.");
 
-        // Look for XLSX files with the pattern "Re_Sistema*.xlsx"
+        // Se buscan archivos XLSX con el patrón "Re_Sistema*.xlsx"
         var files = Directory.GetFiles(_filePath, "Re_Sistema*.xlsx");
         if (files.Length == 0)
         {
@@ -50,10 +66,9 @@ public class D8_Sistema_Controller : Controller
             return NotFound(errorMsg);
         }
 
-        // Truncate the staging table before processing new data
+        // Truncar la tabla de staging antes de procesar nuevos datos
         await D8_TruncateStageTableAsync(logBuilder);
 
-        // Process each file
         foreach (var file in files)
         {
             logBuilder.AppendLine($"Processing file: {file}");
@@ -61,23 +76,42 @@ public class D8_Sistema_Controller : Controller
             try
             {
                 await D8_ProcessLargeXlsx(file, logBuilder);
-                // After processing into staging, perform the final insert into D8_Sistema
+                // Después de cargar en staging, se inserta en la tabla final
                 await D8_InsertToFinalTable(logBuilder);
-                // Move the processed file to the Processed folder
-                D8_MoveFile(file, processedFolder, logBuilder);
+
+                // Movimiento de archivos en caso de Éxito:
+                // Mover el archivo original a Archive
+                D8_MoveFile(file, archiveFolder, logBuilder);
+                // Si existen archivos relacionados, moverlos a Processed
+                string convertedFile = file.Replace(".xlsx", "_converted.xlsx");
+                if (System.IO.File.Exists(convertedFile))
+                    D8_MoveFile(convertedFile, processedFolder, logBuilder);
+                string sanitizedFile = file.Replace(".xlsx", "_sanitized.xlsx");
+                if (System.IO.File.Exists(sanitizedFile))
+                    D8_MoveFile(sanitizedFile, processedFolder, logBuilder);
             }
             catch (Exception ex)
             {
                 logBuilder.AppendLine($"ERR002: Error processing XLSX file {file} - {ex.Message}");
                 _logger.LogError(ex, $"ERR002: Error processing XLSX file {file}");
                 hasErrors = true;
-                // Move problematic file to the Error folder
+
+                // Movimiento de todos los archivos relacionados a la carpeta de Error
                 D8_MoveFile(file, errorFolder, logBuilder);
+                string convertedFile = file.Replace(".xlsx", "_converted.xlsx");
+                if (System.IO.File.Exists(convertedFile))
+                    D8_MoveFile(convertedFile, errorFolder, logBuilder);
+                string sanitizedFile = file.Replace(".xlsx", "_sanitized.xlsx");
+                if (System.IO.File.Exists(sanitizedFile))
+                    D8_MoveFile(sanitizedFile, errorFolder, logBuilder);
+
+                // Se relanza la excepción para que el proceso global falle
+                throw;
             }
         }
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D8 process completed.");
-        _logger.LogInformation("D8 process completed.");
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {controllerName} process completed.");
+        _logger.LogInformation("Process completed.");
         await D8_WriteLog(logBuilder.ToString(), logPath);
 
         return hasErrors
@@ -104,9 +138,8 @@ public class D8_Sistema_Controller : Controller
         using var package = new ExcelPackage(fileInfo);
         ExcelWorksheet worksheet = package.Workbook.Worksheets[0];
         int totalRows = worksheet.Dimension.Rows;
-        int chunkSize = 10000; // Process 10,000 rows at a time
+        int chunkSize = 10000; // Procesar 10,000 filas a la vez
 
-        // Process rows in chunks, skipping the header row (assumed to be row 1)
         for (int startRow = 2; startRow <= totalRows; startRow += chunkSize)
         {
             int endRow = Math.Min(startRow + chunkSize - 1, totalRows);
@@ -124,7 +157,8 @@ public class D8_Sistema_Controller : Controller
         {
             for (int row = startRow; row <= endRow; row++)
             {
-                // Map Excel columns (ignoring the first "Indice" column) to staging table columns.
+                // Mapeo de columnas del Excel a columnas de la tabla staging.
+                // Se omite la primera columna "Indice".
                 string agenciaAsignadaMC = worksheet.Cells[row, 2].Text.Trim();
                 string agenciaMCStr = worksheet.Cells[row, 3].Text.Trim();
                 string banderaPPJuicioStr = worksheet.Cells[row, 4].Text.Trim();
@@ -163,7 +197,7 @@ public class D8_Sistema_Controller : Controller
                 string usuarioAsignado = worksheet.Cells[row, 37].Text.Trim();
                 string usuarioAsignadoExtrajudicial = worksheet.Cells[row, 38].Text.Trim();
 
-                // Parse numeric values using helper methods
+                // Parseo de valores numéricos con métodos auxiliares
                 int? agenciaMC = ParseNullableInt(agenciaMCStr);
                 int? banderaPPJuicio = ParseNullableInt(banderaPPJuicioStr);
                 int? codigoMC = ParseNullableInt(codigoMCStr);
@@ -329,7 +363,10 @@ public class D8_Sistema_Controller : Controller
             if (!Directory.Exists(destinationFolder))
                 Directory.CreateDirectory(destinationFolder);
 
-            var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
+            string fileName = Path.GetFileName(sourceFilePath);
+            string destinationFilePath = Path.Combine(destinationFolder, fileName);
+
+            // Si el archivo ya existe en el destino, se elimina para evitar conflictos
             if (System.IO.File.Exists(destinationFilePath))
                 System.IO.File.Delete(destinationFilePath);
 
@@ -348,9 +385,9 @@ public class D8_Sistema_Controller : Controller
     {
         try
         {
-            var logDir = Path.GetDirectoryName(logPath);
+            string logDir = Path.GetDirectoryName(logPath)!;
             if (!Directory.Exists(logDir))
-                Directory.CreateDirectory(logDir!);
+                Directory.CreateDirectory(logDir);
 
             await System.IO.File.WriteAllTextAsync(logPath, content, Encoding.UTF8);
             _logger.LogInformation($"Log written to: {logPath}");
@@ -362,11 +399,6 @@ public class D8_Sistema_Controller : Controller
         }
     }
 
-    /// <summary>
-    /// Inserts data from the staging table into the final table D8_Sistema.
-    /// Each date field is converted using a CASE expression that handles both
-    /// a datetime format with time (assumed to be mm/dd/yy HH:mm) and a date-only format (assumed to be dd/mm/yyyy).
-    /// </summary>
     private async Task D8_InsertToFinalTable(StringBuilder logBuilder)
     {
         var sqlInsert = @"
@@ -421,7 +453,6 @@ public class D8_Sistema_Controller : Controller
                 Estatus_MC,
                 Estrategia,
                 Excepciones_MC,
-                -- For each date field, check for a datetime with time vs. date-only format.
                 CASE 
                     WHEN TRIM(Fecha_de_Asignacion_CallCenter) = '' THEN NULL
                     WHEN Fecha_de_Asignacion_CallCenter REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{2} [0-9]{2}:[0-9]{2}$'

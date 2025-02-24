@@ -8,14 +8,17 @@ using System.Text;
 using System.Threading.Tasks;
 using OfficeOpenXml;
 
-
 public class D7_Juicios_Controller : Controller
 {
     private readonly ILogger<D7_Juicios_Controller> _logger;
     private readonly IConfiguration _configuration;
     private readonly string _connectionString;
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
-    private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
+    
+    // Rutas para archivos históricos y logs
+    private readonly string _historicFilesPath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
+    private readonly string _historicLogsPath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC LOGS";
+    private readonly string _logsPath = @"C:\Users\Go Credit\Documents\DATA\LOGS";
 
     public D7_Juicios_Controller(ILogger<D7_Juicios_Controller> logger, IConfiguration configuration)
     {
@@ -27,72 +30,117 @@ public class D7_Juicios_Controller : Controller
     [HttpPost]
     public async Task<IActionResult> D7_ProcessJuicios()
     {
-        var logPath = @"C:\Users\Go Credit\Documents\DATA\LOGS\D7_Juicios.log";
-        var historicLogsFolder = Path.Combine(_historicFilePath, "Logs");
-        var archiveFolder = Path.Combine(_historicFilePath, "Archive");
-        var processedFolder = Path.Combine(_historicFilePath, "Processed");
-        var errorFolder = Path.Combine(_historicFilePath, "Error");
+        // Generación dinámica del nombre del log usando el nombre del controlador
+        string controllerName = this.GetType().Name;
+        string logFileName = controllerName + ".log";
+        string logPath = Path.Combine(_logsPath, logFileName);
+
+        // Si ya existe un log con el mismo nombre, moverlo a HISTORIC LOGS
+        if (System.IO.File.Exists(logPath))
+        {
+            if (!Directory.Exists(_historicLogsPath))
+                Directory.CreateDirectory(_historicLogsPath);
+
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string historicLogPath = Path.Combine(_historicLogsPath, controllerName + "_" + timestamp + ".log");
+            System.IO.File.Move(logPath, historicLogPath);
+        }
+
+        // Carpetas destino para archivos según el resultado del proceso
+        var archiveFolder = Path.Combine(_historicFilesPath, "Archive");
+        var processedFolder = Path.Combine(_historicFilesPath, "Processed");
+        var errorFolder = Path.Combine(_historicFilesPath, "Error");
+
         var logBuilder = new StringBuilder();
-        var hasErrors = false;
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {controllerName} process started.");
+        _logger.LogInformation("Process started.");
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D7 process started.");
-        _logger.LogInformation("D7 process started.");
-
-        // Look for XLSX files instead of CSV
+        // Se buscan archivos XLSX que inicien con "Re_Juicios"
         var files = Directory.GetFiles(_filePath, "Re_Juicios*.xlsx");
         if (files.Length == 0)
         {
-            var errorLog = "No files matching 'Juicios*.xlsx' found.";
+            var errorLog = "No files matching 'Re_Juicios*.xlsx' found.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
             await D7_WriteLog(logBuilder.ToString(), logPath);
             return NotFound(errorLog);
         }
 
-        logBuilder.AppendLine($"{files.Length} files matching 'Juicios*.xlsx' found.");
-        _logger.LogInformation($"{files.Length} files matching 'Juicios*.xlsx' found.");
+        logBuilder.AppendLine($"{files.Length} files matching 'Re_Juicios*.xlsx' found.");
+        _logger.LogInformation($"{files.Length} files matching 'Re_Juicios*.xlsx' found.");
 
-        // Truncate staging table before inserting new records
+        // Se limpia la tabla de staging antes de insertar nuevos registros
         await D7_TruncateStagingTableAsync(logBuilder);
 
-        foreach (var file in files)
+        try
         {
-            logBuilder.AppendLine($"Processing file: {file}");
-            _logger.LogInformation($"Processing file: {file}");
-
-            try
+            foreach (var file in files)
             {
-                // Process the XLSX file in chunks
-                await D7_ProcessLargeXlsx(file, logBuilder);
+                logBuilder.AppendLine($"Processing file: {file}");
+                _logger.LogInformation($"Processing file: {file}");
 
-                // Move the processed file to the archive folder
-                D7_MoveFile(file, archiveFolder, logBuilder);
+                try
+                {
+                    // Procesa el archivo XLSX en bloques
+                    await D7_ProcessLargeXlsx(file, logBuilder);
 
-                // Move data from staging to final table
-                await D7_MoveDataToFinalTableAsync(logBuilder);
+                    // Movimiento de archivos en caso de éxito:
+                    // Mover el archivo original a la carpeta Archive
+                    D7_MoveFile(file, archiveFolder, logBuilder);
 
-                logBuilder.AppendLine($"File {file} processed successfully.");
-                _logger.LogInformation($"File {file} processed successfully.");
-            }
-            catch (Exception ex)
-            {
-                logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
-                _logger.LogError(ex, $"Error processing file {file}");
-                hasErrors = true;
+                    // En caso de existir archivos procesados (por ejemplo, convertidos o sanitizados),
+                    // se mueven a la carpeta Processed.
+                    string convertedFile = file.Replace(".xlsx", "_converted.xlsx");
+                    if (System.IO.File.Exists(convertedFile))
+                        D7_MoveFile(convertedFile, processedFolder, logBuilder);
 
-                // Move problematic file to the error folder
-                D7_MoveFile(file, errorFolder, logBuilder);
+                    string sanitizedFile = file.Replace(".xlsx", "_sanitized.xlsx");
+                    if (System.IO.File.Exists(sanitizedFile))
+                        D7_MoveFile(sanitizedFile, processedFolder, logBuilder);
+
+                    // Mover los datos desde la tabla staging a la tabla final
+                    await D7_MoveDataToFinalTableAsync(logBuilder);
+
+                    logBuilder.AppendLine($"File {file} processed successfully.");
+                    _logger.LogInformation($"File {file} processed successfully.");
+                }
+                catch (Exception ex)
+                {
+                    logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
+                    _logger.LogError(ex, $"Error processing file {file}");
+
+                    // Movimiento de todos los archivos relacionados a la carpeta Error
+                    D7_MoveFile(file, errorFolder, logBuilder);
+
+                    string convertedFile = file.Replace(".xlsx", "_converted.xlsx");
+                    if (System.IO.File.Exists(convertedFile))
+                        D7_MoveFile(convertedFile, errorFolder, logBuilder);
+
+                    string sanitizedFile = file.Replace(".xlsx", "_sanitized.xlsx");
+                    if (System.IO.File.Exists(sanitizedFile))
+                        D7_MoveFile(sanitizedFile, errorFolder, logBuilder);
+
+                    // Se relanza la excepción para asegurar que el proceso no termine exitosamente
+                    throw;
+                }
             }
         }
+        catch (Exception finalEx)
+        {
+            logBuilder.AppendLine($"Process terminated with error: {finalEx.Message}");
+            _logger.LogError(finalEx, "Process terminated with error.");
+            await D7_WriteLog(logBuilder.ToString(), logPath);
+            // Se relanza la excepción para que el proceso global falle
+            throw;
+        }
 
-        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D7 process completed.");
-        _logger.LogInformation("D7 process completed.");
+        logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed successfully.");
+        _logger.LogInformation("Process completed successfully.");
         await D7_WriteLog(logBuilder.ToString(), logPath);
-        D7_MoveLogToHistoric(logPath, historicLogsFolder);
+        // Opcional: Mover el log a una carpeta histórica (si se desea mantener un historial adicional)
+        D7_MoveLogToHistoric(logPath, _historicLogsPath);
 
-        return hasErrors
-            ? StatusCode(500, "D7 process completed with errors. Check the log for details.")
-            : Ok("D7 process completed successfully.");
+        return Ok("Process completed successfully.");
     }
 
     private async Task D7_TruncateStagingTableAsync(StringBuilder logBuilder)
@@ -115,9 +163,9 @@ public class D7_Juicios_Controller : Controller
         ExcelWorksheet worksheet = package.Workbook.Worksheets[0];
 
         int totalRows = worksheet.Dimension.Rows;
-        int chunkSize = 10000; // Process in chunks
+        int chunkSize = 10000; // Procesar en bloques
 
-        for (int startRow = 2; startRow <= totalRows; startRow += chunkSize) // Start from 2 to skip header
+        for (int startRow = 2; startRow <= totalRows; startRow += chunkSize) // Se salta el encabezado
         {
             int endRow = Math.Min(startRow + chunkSize - 1, totalRows);
             await D7_ProcessChunkAsync(worksheet, startRow, endRow, logBuilder);
@@ -134,7 +182,7 @@ public class D7_Juicios_Controller : Controller
         {
             for (int row = startRow; row <= endRow; row++)
             {
-                // Read values from the worksheet based on the column structure
+                // Lectura y conversión de valores de cada columna
                 var indice = int.TryParse(worksheet.Cells[row, 1].Text.Trim(), out var idx) ? idx : (int?)null;
                 var creditoMc = int.TryParse(worksheet.Cells[row, 2].Text.Trim(), out var credMc) ? credMc : (int?)null;
                 var decla = worksheet.Cells[row, 3].Text.Trim();
@@ -144,7 +192,7 @@ public class D7_Juicios_Controller : Controller
                 var estatus = worksheet.Cells[row, 7].Text.Trim();
                 var etapaProcesal = worksheet.Cells[row, 8].Text.Trim();
 
-                // Ensure `Expediente` is numeric, otherwise set it to NULL
+                // Validación para Expediente
                 var expedienteRaw = worksheet.Cells[row, 9].Text.Trim();
                 var expediente = long.TryParse(expedienteRaw, out var expValue) ? expValue : (long?)null;
 
@@ -159,7 +207,7 @@ public class D7_Juicios_Controller : Controller
                 var tipoJuicio = worksheet.Cells[row, 18].Text.Trim();
                 var validarCierre = worksheet.Cells[row, 19].Text.Trim();
 
-                // Insert into the staging table (including Indice)
+                // Inserción en la tabla staging
                 var sqlInsertCommand = @"
                     INSERT INTO D7_Stage_Juicios (
                         Indice, Credito_MC, Decla, Descripcion_Cierre, Dias_Activo, Dias_Caducar, Estatus,
@@ -219,7 +267,7 @@ public class D7_Juicios_Controller : Controller
             return parsedDate;
         }
 
-        return DBNull.Value; // Invalid or empty dates are set to NULL
+        return DBNull.Value;
     }
 
     private async Task D7_MoveDataToFinalTableAsync(StringBuilder logBuilder)
@@ -230,7 +278,7 @@ public class D7_Juicios_Controller : Controller
         
         try
         {
-            // Truncate final table before inserting new data
+            // Truncar la tabla final antes de insertar nuevos datos
             var truncateCommand = new MySqlCommand("TRUNCATE TABLE D7_Juicios;", connection, transaction);
             await truncateCommand.ExecuteNonQueryAsync();
             logBuilder.AppendLine("Truncated D7_Juicios table.");
@@ -245,11 +293,7 @@ public class D7_Juicios_Controller : Controller
                 SELECT 
                     s.Credito_MC, s.Decla, s.Descripcion_Cierre, s.Dias_Activo, s.Dias_Caducar, s.Estatus,
                     s.Etapa_Procesal,
-
-                    -- Ensure Expediente is numeric, otherwise set it to NULL
                     CASE WHEN s.Expediente REGEXP '^[0-9]+$' THEN s.Expediente ELSE NULL END AS Expediente,
-
-                    -- Convert Fecha_Actualizacion to DATETIME
                     CASE 
                         WHEN s.Fecha_Actualizacion REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{2} [0-9]{2}:[0-9]{2}$' 
                         THEN STR_TO_DATE(s.Fecha_Actualizacion, '%m/%d/%y %H:%i')
@@ -257,8 +301,6 @@ public class D7_Juicios_Controller : Controller
                         THEN STR_TO_DATE(s.Fecha_Actualizacion, '%d/%m/%Y %H:%i')
                         ELSE NULL
                     END AS Fecha_Actualizacion,
-
-                    -- Convert Fecha_Carga_Inicial to DATETIME
                     CASE 
                         WHEN s.Fecha_Carga_Inicial REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{2} [0-9]{2}:[0-9]{2}$' 
                         THEN STR_TO_DATE(s.Fecha_Carga_Inicial, '%m/%d/%y %H:%i')
@@ -266,21 +308,16 @@ public class D7_Juicios_Controller : Controller
                         THEN STR_TO_DATE(s.Fecha_Carga_Inicial, '%d/%m/%Y %H:%i')
                         ELSE NULL
                     END AS Fecha_Carga_Inicial,
-
-                    -- Convert Fecha_Cierre to DATE (No time component)
                     CASE 
                         WHEN s.Fecha_Cierre REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$' 
                         THEN STR_TO_DATE(s.Fecha_Cierre, '%d/%m/%Y')
                         ELSE NULL
                     END AS Fecha_Cierre,
-
-                    -- Convert Fecha_Ultima_Act to DATE (No time component)
                     CASE 
                         WHEN s.Fecha_Ultima_Act REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$' 
                         THEN STR_TO_DATE(s.Fecha_Ultima_Act, '%d/%m/%Y')
                         ELSE NULL
                     END AS Fecha_Ultima_Act,
-
                     s.Id_Juicio, s.Juzgado, s.Motivo_Cierre, s.Producto_MC, s.Tipo_Juicio, s.Validar_Cierre
                 FROM D7_Stage_Juicios s;";
 
@@ -318,7 +355,7 @@ public class D7_Juicios_Controller : Controller
             string fileName = Path.GetFileName(sourceFilePath);
             string destinationFilePath = Path.Combine(destinationFolder, fileName);
 
-            // If the file already exists, append a timestamp to avoid conflicts
+            // Si el archivo ya existe en el destino, se agrega un timestamp para evitar conflictos
             if (System.IO.File.Exists(destinationFilePath))
             {
                 string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -365,5 +402,4 @@ public class D7_Juicios_Controller : Controller
             _logger.LogError(ex, $"Error moving log file to historic folder: {ex.Message}");
         }
     }
-
 }
