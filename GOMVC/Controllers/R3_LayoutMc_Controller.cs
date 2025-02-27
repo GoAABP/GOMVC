@@ -180,7 +180,7 @@ namespace GOMVC.Controllers
                     MAX(fin.Producto),
                     MAX(fin.Financiamiento) AS Tipo_de_Credito,
                     MAX(p.Plaza), MAX(dep.Estatus), MAX(dep.Abreviatura), MAX(dep.Clasificacion),
-                    MAX(qc.QuebrantoContable), MAX(qc.CapitalQuebrantado), MAX(qc.SaldoReal), MAX(qc.FechaQuebranto),
+                    MAX(qc.Quebranto_Contable), MAX(qc.Quebranto_Capital), MAX(qc.Saldo_Q_Pagare), MAX(qc.Fecha_Quebranto),
                     MAX(pc.Estatus_Cartera), MAX(pc.Total_Pagado), MAX(pc.Saldo_Pago_Exceso), MAX(pc.Porcentaje_Pagado),
                     MAX(domi.Rechazo), MAX(qc.Recuperacion)
                 FROM 

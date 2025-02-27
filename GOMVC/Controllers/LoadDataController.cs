@@ -38,7 +38,12 @@ public class LoadDataController : Controller
     {
         var activities = new List<string>
         {
-            "B1_Demograficos",
+            "Backup Zell",
+            "C1_Dependencias",
+            "C2_Financiamientos",
+            "C3_Motios",
+            "C4_Bancos",
+            "C6_Resultados_Avance",
             "D1_Saldos_Cartera",
             "D1B_Saldos_Cartera",
             "D2_Saldos_Contables",
@@ -50,11 +55,7 @@ public class LoadDataController : Controller
             "D7_Juicios",
             "D8_Sistema",
             "D9_Gestores_Area",
-            "C1_Dependencias",
-            "C2_Financiamientos",
-            "C3_Motios",
-            "C4_Bancos",
-            "C6_Resultados_Avance",
+            "I2_Campaña_Quebrantos",
             "R1_Quebrantos_Calculado",
             "R3_LayoutMc"
         };
@@ -70,11 +71,11 @@ public class LoadDataController : Controller
 
             switch (activityName.ToLower())
             {
-                case "b1_demograficos":
-                    var demograficsController = new B1_Demograficos_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<B1_Demograficos_Controller>>(),
+                case "backup zell":
+                    var demograficsController = new Backup_Zell_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<Backup_Zell_Controller>>(),
                         _configuration);
-                    result = await demograficsController.B1_ProcessDemograficos();
+                    result = await demograficsController.ProcessBackup();
                     break;
 
                 case "d1_saldos_cartera":
@@ -98,7 +99,7 @@ public class LoadDataController : Controller
                     result = await saldosContablesController.D2_ProcessSaldosContables();
                     break;
 
-                    case "d2b_saldos_contables":
+                case "d2b_saldos_contables":
                     var saldosContablesControllerb = new D2_Saldos_Contables_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
                         _configuration);
@@ -145,6 +146,13 @@ public class LoadDataController : Controller
                         HttpContext.RequestServices.GetRequiredService<ILogger<D8_Sistema_Controller>>(),
                         _configuration);
                     result = await sistemasController.D8_ProcessSistema();
+                    break;
+                
+                case "i2_campaña_quebrantos":
+                    var campañasController = new I2_Campaña_Quebrantos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<I2_Campaña_Quebrantos_Controller>>(),
+                        _configuration);
+                    result = await campañasController.Process();
                     break;
 
                 case "r1_quebrantos_calculado":
