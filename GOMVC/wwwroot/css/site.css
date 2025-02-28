@@ -1,242 +1,35 @@
-/* ========================
-   Estilos base y tipografía
-   ======================== */
+/* Estilos generales */
+body, html {
+  font-family: 'Roboto', sans-serif;
+  background-color: #f8f9fa;
+  margin: 0;
+  padding: 0;
+  color: #212529;
+}
 
-   html, body {
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0;
-    padding: 0;
-  }
-  
-  html {
+/* Contenedor principal */
+.content-container {
+  margin-top: 20px;
+  margin-bottom: 80px; /* Espacio para el footer */
+}
+
+/* Encabezado */
+.site-header {
+  margin-bottom: 20px;
+}
+
+/* Pie de página */
+.site-footer {
+  background-color: #e9ecef;
+  padding: 15px 0;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+  .site-footer {
     font-size: 14px;
   }
-  @media (min-width: 768px) {
-    html {
-      font-size: 16px;
-    }
-  }
-  
-  body {
-    margin-bottom: 0;
-    background: linear-gradient(135deg, #2a2a2a, #121212);
-    color: #e0e0e0;
-  }
-  
-  /* ========================
-     Layout principal y Sticky Footer (no fixed)
-     ======================== */
-  
-  .layout-container {
-    display: flex;
-    min-height: 100vh;
-  }
-  
-  /* ========================
-     Sidebar (menú lateral) con efecto glass
-     ======================== */
-  
-  .sidebar {
-    display: flex;
-    flex-direction: column;
-    width: 250px;
-    padding: 1rem;
-    background: rgba(18, 18, 18, 0.6);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border-right: none;
-  }
-  
-  .logout-container {
-    margin-top: auto;
-  }
-  .logout-container .btn-link {
-    color: #bb86fc !important;
-    text-decoration: none;
-    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-  }
-  .logout-container .btn-link:hover {
-    background-color: rgba(75, 0, 130, 0.2);
-    color: #bb86fc !important;
-  }
-  
-  /* ========================
-     Enlaces del Sidebar
-     ======================== */
-  
-  .sidebar a {
-    color: #bb86fc;
-    text-decoration: none;
-    display: block;
-    padding: 0.5rem 0;
-    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-  }
-  .sidebar a:hover,
-  .sidebar a:focus,
-  .sidebar a:active {
-    background-color: rgba(75, 0, 130, 0.2);
-    color: #bb86fc !important;
-    border-radius: 4px;
-  }
-  .sidebar a.dropdown-toggle {
-    color: #bb86fc !important;
-    text-decoration: none !important;
-  }
-  .sidebar a.dropdown-toggle:active,
-  .sidebar a.dropdown-toggle:focus {
-    background-color: rgba(18, 18, 18, 0.8);
-  }
-  
-  /* ========================
-     Menú desplegable (Default Reports)
-     ======================== */
-  
-  .dropdown-menu {
-    border: none;
-    background-color: rgba(18, 18, 18, 0.6);
-  }
-  .dropdown-menu.show {
-    background-color: rgba(18, 18, 18, 0.8);
-  }
-  .dropdown-menu .dropdown-item {
-    color: #e0e0e0;
-    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-  }
-  .dropdown-menu .dropdown-item:hover,
-  .dropdown-menu .dropdown-item:focus {
-    background-color: rgba(75, 0, 130, 0.2);
-    color: #e0e0e0;
-  }
-  
-  /* ========================
-     Área de contenido principal
-     ======================== */
-  
-  .content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-  }
-  
-  .content main {
-    flex: 1;
-    overflow-y: auto;
-  }
-  
-  /* Footer colocado al final del contenido */
-  .footer {
-    background: transparent;
-    padding: 10px 0;
-    text-align: center;
-    font-size: 0.9rem;
-  }
-  
-  /* ========================
-     Material Icons y acentos
-     ======================== */
-  
-  .material-icons {
-    font-size: 24px;
-    vertical-align: middle;
-    margin-right: 8px;
-    color: #bb86fc;
-  }
-  
-  /* ========================
-     Responsividad
-     ======================== */
-  
-  @media (max-width: 768px) {
-    .layout-container {
-      flex-direction: column;
-    }
-    
-    .sidebar {
-      width: 100%;
-      padding: 1rem;
-    }
-    
-    .content {
-      padding: 1rem;
-    }
-    
-    .sidebar ul {
-      flex-direction: row;
-      overflow-x: auto;
-    }
-    
-    .sidebar ul li {
-      flex: 1;
-      text-align: center;
-    }
-  }
-  
-  /* ========================
-     Tarjetas y contenedores "flotantes"
-     ======================== */
-  
-  /* Clase para fondo de la card que emula el color del sidebar */
-  .bg-card {
-    background: rgba(18, 18, 18, 0.6);
-  }
-  
-  /* Aplicada a la card principal para que se vea flotante */
-  .card-full-height {
-    min-height: calc(100vh - 60px);
-    margin: 0;
-    border-radius: 0;
-  }
-  
-  /* La card principal ahora usa la clase bg-card */
-  .card {
-    /* Mantiene el efecto glass */
-    background: rgba(18, 18, 18, 0.6);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border: none;
-    border-radius: 8px;
-  }
-  
-  .card-header {
-    background: transparent;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  .card-body {
-    padding: 2rem;
-  }
-  
-  .card.shadow-sm {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  }
-  .card.shadow-lg {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-  }
-  
-  /* ========================
-     Estilos para tablas en modo oscuro
-     ======================== */
-  
-  .table {
-    color: #e0e0e0;
-  }
-  .table thead th {
-    background-color: rgba(18, 18, 18, 0.8);
-    color: #bb86fc;
-    border-color: rgba(255, 255, 255, 0.1);
-    font-weight: 600;
-  }
-  .table tbody td {
-    background: transparent;
-    color: #e0e0e0;
-  }
-  .table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(255, 255, 255, 0.03);
-  }
-  .table-bordered,
-  .table-bordered th,
-  .table-bordered td {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
+}

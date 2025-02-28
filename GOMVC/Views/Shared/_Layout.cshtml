@@ -1,100 +1,69 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>@ViewData["Title"] - GOMVC</title>
-  <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-  <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-  <link rel="stylesheet" href="~/GOMVC.styles.css" asp-append-version="true" />
-  <!-- Integración de Material Icons -->
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Mi Aplicación</title>
+    <!-- Fuente Roboto -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,500&display=swap" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
-  <!-- Layout principal con flex, para que el sidebar y el contenido compartan el alto -->
-  <div class="layout-container">
-    <!-- Sidebar con efecto glass y acento morado -->
-    <nav class="sidebar">
-      <div class="sidebar-header mb-4">
-        <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">
-          <span class="material-icons">home</span> GOMVC
-        </a>
-      </div>
-      <ul class="nav flex-column">
-        <li class="nav-item">
-          <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Index">
-            <span class="material-icons">dashboard</span> Home
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Privacy">
-            <span class="material-icons">security</span> Privacy
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link dropdown-toggle" href="#" id="defaultReportsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-            <span class="material-icons">assignment</span> Default Reports
-          </a>
-          <ul class="dropdown-menu" aria-labelledby="defaultReportsDropdown">
-            <li>
-              <a class="dropdown-item" asp-area="" asp-controller="SaldosCartera" asp-action="Index">
-                <span class="material-icons">account_balance_wallet</span> Saldos Cartera
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" asp-area="" asp-controller="SaldosContables" asp-action="Index">
-                <span class="material-icons">receipt_long</span> Saldos Contables
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" asp-area="" asp-controller="AplicacionPagos" asp-action="Index">
-                <span class="material-icons">payment</span> Aplicacion Pagos
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" asp-area="" asp-controller="OtorgamientoCreditos" asp-action="Index">
-                <span class="material-icons">credit_score</span> Otorgamiento Creditos
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" asp-area="" asp-controller="Gestiones" asp-action="Index">
-                <span class="material-icons">support_agent</span> Gestiones
-              </a>
-            </li>
-          </ul>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" asp-area="" asp-controller="LoadData" asp-action="Index">
-            <span class="material-icons">cloud_upload</span> Load Data
-          </a>
-        </li>
-      </ul>
-      <!-- Botón de Logout al final del sidebar -->
-      <div class="logout-container">
-        <form asp-area="" asp-controller="User" asp-action="Logout" method="post">
-          <button type="submit" class="btn btn-link nav-link">
-            <span class="material-icons">logout</span> Logout
-          </button>
-        </form>
-      </div>
-    </nav>
+    <header class="site-header">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container">
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">Mi Aplicación</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNav">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index">Inicio</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Privacy">Privacidad</a>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="reportsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Reportes
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="reportsDropdown">
+                                <li><a class="dropdown-item" asp-controller="SaldosCartera" asp-action="Index">Saldos Cartera</a></li>
+                                <li><a class="dropdown-item" asp-controller="SaldosContables" asp-action="Index">Saldos Contables</a></li>
+                                <li><a class="dropdown-item" asp-controller="AplicacionPagos" asp-action="Index">Aplicación Pagos</a></li>
+                                <li><a class="dropdown-item" asp-controller="OtorgamientoCreditos" asp-action="Index">Otorgamiento Créditos</a></li>
+                                <li><a class="dropdown-item" asp-controller="Gestiones" asp-action="Index">Gestiones</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="LoadData" asp-action="Index">Cargar Datos</a>
+                        </li>
+                    </ul>
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="User" asp-action="Logout">Cerrar sesión</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
 
-    <!-- Contenido principal que utiliza flex para empujar el footer al final -->
-    <div class="content">
-      <main role="main">
+    <div class="container content-container">
         @RenderBody()
-      </main>
-      <footer class="footer">
-        <div class="container">
-          © 2024 - GOMVC - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-        </div>
-      </footer>
     </div>
-  </div>
 
-  <script src="~/lib/jquery/dist/jquery.min.js"></script>
-  <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="~/js/site.js" asp-append-version="true"></script>
-  @await RenderSectionAsync("Scripts", required: false)
+    <footer class="site-footer text-center">
+        <div class="container">
+            <p>© 2024 - Mi Aplicación - <a asp-controller="Home" asp-action="Privacy">Privacidad</a></p>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
