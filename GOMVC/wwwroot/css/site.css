@@ -1,35 +1,150 @@
-/* Estilos generales */
-body, html {
-  font-family: 'Roboto', sans-serif;
-  background-color: #f8f9fa;
+/* site.css */
+
+/* 
+  1. Paleta de colores oscura y variables para facilitar ajustes
+     en un diseño que ayude a reducir la fatiga visual.
+*/
+:root {
+  --bg-color: #121212;       /* Fondo principal */
+  --nav-bg: #1f1f1f;         /* Fondo de la barra de navegación */
+  --nav-text: #e0e0e0;       /* Color del texto en la navbar */
+  --accent-color: #bb86fc;   /* Color de acento (morado) */
+  --border-color: #333333;   /* Color para bordes y separadores */
+  --footer-bg: #1f1f1f;      /* Fondo del footer */
+  --footer-text: #b0b0b0;    /* Color de texto en el footer */
+  --link-color: #bb86fc;     /* Color de enlaces */
+  --link-hover: #d0a9ff;     /* Color de enlaces al hacer hover */
+}
+
+/* 2. Reset y configuración base */
+html, body {
   margin: 0;
   padding: 0;
-  color: #212529;
+  background-color: var(--bg-color);
+  color: var(--nav-text);
+  font-family: 'Open Sans', sans-serif;
 }
 
-/* Contenedor principal */
-.content-container {
-  margin-top: 20px;
-  margin-bottom: 80px; /* Espacio para el footer */
+/* 3. Navbar ajustes */
+.navbar {
+  background-color: var(--nav-bg) !important;
+  border-color: var(--border-color);
 }
 
-/* Encabezado */
-.site-header {
-  margin-bottom: 20px;
+.navbar-brand,
+.nav-link,
+.navbar-nav .nav-link {
+  color: var(--nav-text) !important;
+  transition: color 0.3s ease;
 }
 
-/* Pie de página */
-.site-footer {
-  background-color: #e9ecef;
-  padding: 15px 0;
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link:focus {
+  color: var(--accent-color) !important;
+}
+
+/* 4. Dropdown custom styles */
+.dropdown-menu {
+  background-color: var(--nav-bg);
+  border: 1px solid var(--border-color);
+}
+
+.dropdown-menu .dropdown-item {
+  color: var(--nav-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu .dropdown-item:focus {
+  background-color: var(--accent-color);
+  color: var(--bg-color);
+}
+
+/* 5. Ajuste para alinear los íconos con el texto en la navbar */
+.navbar .material-icons {
+  vertical-align: middle;
+  font-size: 1.1rem; 
+  line-height: 1;
+}
+
+/* 6. Estilos principales para el contenido */
+main {
+  padding: 1rem;
+}
+
+/* 7. Estilos para tarjetas (cards) en fondo oscuro */
+.card {
+  background-color: var(--nav-bg);
+  border: 1px solid var(--border-color);
+}
+
+/* 8. Tabla oscura (table-dark) */
+.table-dark {
+  color: var(--nav-text);
+  background-color: var(--bg-color);
+}
+
+/* Ajusta bordes de las celdas en la tabla oscura */
+.table-dark th,
+.table-dark td,
+.table-dark thead th {
+  border-color: var(--border-color);
+}
+
+/* 9. Contenedor que controla el scroll y la altura de la tabla */
+.table-wrapper {
+  max-height: 600px; /* Aumenta si quieres mostrar más filas antes de scrollear */
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* Encabezado fijo al hacer scroll vertical */
+.table-dark thead th {
+  position: sticky;
+  top: 0;
+  background-color: var(--nav-bg); /* Color de fondo para el header sticky */
+  z-index: 2;
+}
+
+/* Columna fija al hacer scroll horizontal */
+.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 3; /* Debe ser mayor que el de thead */
+  background-color: var(--nav-bg);
+}
+
+/* 10. Mensaje flotante de alerta */
+.floating-message {
+  display: none;
   position: fixed;
-  bottom: 0;
-  width: 100%;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  font-size: 16px;
 }
 
-/* Ajustes responsivos */
+/* 11. Footer styling */
+.footer {
+  background-color: var(--footer-bg);
+  color: var(--footer-text);
+  border-top: 1px solid var(--border-color);
+}
+
+.footer a {
+  color: var(--link-color);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+  color: var(--link-hover);
+}
+
+/* 12. Ajustes responsivos */
 @media (max-width: 768px) {
-  .site-footer {
-    font-size: 14px;
+  main {
+    padding: 0.5rem;
   }
 }

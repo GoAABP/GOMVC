@@ -1,34 +1,16 @@
 @model List<string>
-
 @{
+    Layout = "~/Views/Shared/_Layout.cshtml";
     ViewData["Title"] = "Load Data";
 }
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@ViewData["Title"]</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
-    <style>
-        .floating-message {
-            display: none;
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            font-size: 16px;
-        }
-    </style>
-</head>
-<body>
-    <h2>Load Data</h2>
+<div class="container my-4">
+    <h2 class="mb-4">Load Data</h2>
 
     <form id="loadDataForm" asp-action="HandleActivity" asp-controller="LoadData" method="post">
-        <div class="form-group">
-            <label for="activityName">Select Activity</label>
-            <select id="activityName" name="activityName" class="form-control">
+        <div class="mb-3">
+            <label for="activityName" class="form-label">Select Activity</label>
+            <select id="activityName" name="activityName" class="form-select">
                 @foreach (var activity in Model)
                 {
                     <option value="@activity">@activity</option>
@@ -38,10 +20,13 @@
         <button type="submit" class="btn btn-primary">Execute</button>
     </form>
 
+    <!-- Mensaje flotante de alerta -->
     <div id="message" class="floating-message alert" role="alert"></div>
+</div>
 
+@section Scripts {
     <script>
-        document.getElementById('loadDataForm').addEventListener('submit', function(event) {
+        document.getElementById('loadDataForm').addEventListener('submit', function (event) {
             event.preventDefault();
             
             var form = event.target;
@@ -73,10 +58,9 @@
             messageDiv.className = 'floating-message alert ' + (isSuccess ? 'alert-success' : 'alert-danger');
             messageDiv.style.display = 'block';
             
-            setTimeout(function() {
+            setTimeout(function () {
                 messageDiv.style.display = 'none';
             }, 60000); // 60 seconds
         }
     </script>
-</body>
-</html>
+}

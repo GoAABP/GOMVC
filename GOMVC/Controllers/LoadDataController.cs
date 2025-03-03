@@ -52,11 +52,13 @@ public class LoadDataController : Controller
             "D4_Otorgamiento_Creditos",
             "D5_Gestiones",
             "D6_Quebrantos",
+            "D6B_Quebrantos",
             "D7_Juicios",
             "D8_Sistema",
             "D9_Gestores_Area",
             "I2_Campaña_Quebrantos",
-            "R1_Quebrantos_Calculado",
+            "R1_Quebrantos_Calculado_Most_Recent",
+            "R1_Quebrantos_Calculado_Specific_Date",
             "R3_LayoutMc"
         };
         return View(activities);
@@ -133,6 +135,12 @@ public class LoadDataController : Controller
                         _configuration);
                     result = await quebrantosController.D6_ProcessQuebrantos();
                     break;
+                case "d6b_quebrantos":
+                    var quebrantosControllerb = new D6_Quebrantos_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
+                        _configuration);
+                    result = await quebrantosControllerb.D6_ProcessHistoricQuebrantos();
+                    break;
                 
                 case "d7_juicios":
                     var juiciosController = new D7_Juicios_Controller(
@@ -155,11 +163,18 @@ public class LoadDataController : Controller
                     result = await campañasController.Process();
                     break;
 
-                case "r1_quebrantos_calculado":
-                    var quebrantosControllerExport = new D6_Quebrantos_Controller(
+                case "r1_quebrantos_calculado_most_recent":
+                    var quebrantosCalculadoController = new D6_Quebrantos_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
                         _configuration);
-                    result = await quebrantosControllerExport.D6_ProcessQuebrantosCalculationsAndExport();
+                    result = await quebrantosCalculadoController.D6_ProcessQuebrantosCalculationsAndExport();
+                    break;
+                
+                case "r1_quebrantos_calculado_specific_date":
+                    var quebrantosCalculadoControllerb = new R1_Quebrantos_Calculado_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<R1_Quebrantos_Calculado_Controller>>(),
+                        _configuration);
+                    result = await quebrantosCalculadoControllerb.R1_ProcessQuebrantosCalculationsAndExport_Hardcoded();
                     break;
                 
                 case "r3_layoutmc":
