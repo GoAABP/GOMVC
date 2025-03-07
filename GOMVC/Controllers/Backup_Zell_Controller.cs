@@ -170,7 +170,7 @@ public class Backup_Zell_Controller : Controller
 
             // 4. EXPORTAR LA TABLA dwtClient (demográficos) USANDO SQLCMD
             // Se usa -h -1 para no incluir encabezados ni guiones
-            string exportDemograficosCommand = $"sqlcmd -S {_sqlServerInstance} -d {_dbName} -E -Q \"SELECT * FROM dwtClient\" -s \"|\" -W -h -1 -o \"{Path.Combine(_filePath, "Demograficos.csv")}\"";
+            string exportDemograficosCommand = $"sqlcmd -S {_sqlServerInstance} -d {_dbName} -E -Q \"SELECT * FROM dwtClient\" -s \";\" -W -h -1 -o \"{Path.Combine(_filePath, "Demograficos.csv")}\"";
             logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting export of dwtClient using: {exportDemograficosCommand}");
             _logger.LogInformation($"Starting export of dwtClient using: {exportDemograficosCommand}");
             var demograficosExportLogBuilder = new StringBuilder();
@@ -208,7 +208,7 @@ public class Backup_Zell_Controller : Controller
                 throw new Exception("Bulk insert to MySQL for demograficos failed.");
 
             // 6. EXPORTAR LA TABLA dwtCreditDeferral (amortizaciones) USANDO SQLCMD
-            string exportAmortizacionesCommand = $"sqlcmd -S {_sqlServerInstance} -d {_dbName} -E -Q \"SELECT * FROM dwtCreditDeferral\" -s \"|\" -W -h -1 -o \"{Path.Combine(_filePath, "amortizaciones.csv")}\"";
+            string exportAmortizacionesCommand = $"sqlcmd -S {_sqlServerInstance} -d {_dbName} -E -Q \"SELECT * FROM dwtCreditDeferral\" -s \";\" -W -h -1 -o \"{Path.Combine(_filePath, "amortizaciones.csv")}\"";
             logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Starting export of dwtCreditDeferral using: {exportAmortizacionesCommand}");
             _logger.LogInformation($"Starting export of dwtCreditDeferral using: {exportAmortizacionesCommand}");
             var amortizacionesExportLogBuilder = new StringBuilder();
@@ -348,7 +348,7 @@ public class Backup_Zell_Controller : Controller
                 }
                 var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
                                       "INTO TABLE B1_Demograficos " +
-                                      "FIELDS TERMINATED BY '|' " +
+                                      "FIELDS TERMINATED BY ';' " +
                                       "ENCLOSED BY '\"' " +
                                       "LINES TERMINATED BY '\\n' " +
                                       "IGNORE 0 LINES;";
@@ -392,7 +392,7 @@ public class Backup_Zell_Controller : Controller
                 }
                 var loadCommandText = $"LOAD DATA LOCAL INFILE '{csvFilePath.Replace("\\", "\\\\")}' " +
                                       "INTO TABLE B2_Stage_Amortizaciones " +
-                                      "FIELDS TERMINATED BY '|' " +
+                                      "FIELDS TERMINATED BY ';' " +
                                       "ENCLOSED BY '\"' " +
                                       "LINES TERMINATED BY '\\n' " +
                                       "IGNORE 0 LINES;";

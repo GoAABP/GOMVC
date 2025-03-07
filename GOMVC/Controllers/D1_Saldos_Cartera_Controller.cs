@@ -320,57 +320,70 @@ public class D1_Saldos_Cartera_Controller : Controller
 
     private async Task D1_InsertHistoricData(DateTime fechaGenerado, StringBuilder logBuilder)
     {
+        // Lista de columnas de fecha en la tabla stage que se insertarán en la tabla final:
+        // Primer_Pago_Teorico, Ultimo_Pago, Fecha_Desembolso, Primer_Pago_Real, 
+        // Ultimo_Pago_c_ListaCobro, Ultimo_Pago_Aplicado, Sig_Pago, vMaxDate
+
+        var sqlPurgeCommand = @"
+            UPDATE D1_Stage_Saldos_Cartera
+            SET 
+                Primer_Pago_Teorico = NULLIF(Primer_Pago_Teorico, ''),
+                Ultimo_Pago = NULLIF(Ultimo_Pago, ''),
+                Fecha_Desembolso = NULLIF(Fecha_Desembolso, ''),
+                Primer_Pago_Real = NULLIF(Primer_Pago_Real, ''),
+                Ultimo_Pago_c_ListaCobro = NULLIF(Ultimo_Pago_c_ListaCobro, ''),
+                Ultimo_Pago_Aplicado = NULLIF(Ultimo_Pago_Aplicado, ''),
+                Sig_Pago = NULLIF(Sig_Pago, ''),
+                vMaxDate = NULLIF(vMaxDate, '')
+        ;
+        ";
+
         var sqlInsertCommand = @"
-        INSERT INTO D1_Saldos_Cartera (
-            Id_Solicitud, Id_Credito, Id_Persona, Referencia, Afiliado, Nombre, Monto, Comision, 
-            Intereses_Totales, Monto_Total, Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, 
-            IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
-            Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
-            Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
-            Id_Convenio, Dependencia, 
-            CASE 
-                WHEN Primer_Pago_Teorico REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN Primer_Pago_Teorico
-                ELSE STR_TO_DATE(NULLIF(NULLIF(Primer_Pago_Teorico, ''), '0.00'), '%d/%m/%Y')
-            END AS Primer_Pago_Teorico,
-            CASE 
-                WHEN Ultimo_Pago REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN Ultimo_Pago
-                ELSE STR_TO_DATE(NULLIF(NULLIF(Ultimo_Pago, ''), '0.00'), '%d/%m/%Y')
-            END AS Ultimo_Pago,
-            Tipo_Financiamiento, Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, Sdo_Insoluto, 
-            Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, Sucursal, 
-            CASE 
-                WHEN Fecha_Desembolso REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN Fecha_Desembolso
-                ELSE STR_TO_DATE(NULLIF(NULLIF(Fecha_Desembolso, ''), '0.00'), '%d/%m/%Y')
-            END AS Fecha_Desembolso,
-            Frecuencia, 
-            CASE 
-                WHEN Primer_Pago_Real REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN Primer_Pago_Real
-                ELSE STR_TO_DATE(NULLIF(NULLIF(Primer_Pago_Real, ''), '0.00'), '%d/%m/%Y')
-            END AS Primer_Pago_Real,
-            CASE 
-                WHEN Ultimo_Pago_c_ListaCobro REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN Ultimo_Pago_c_ListaCobro
-                ELSE STR_TO_DATE(NULLIF(NULLIF(Ultimo_Pago_c_ListaCobro, ''), '0.00'), '%d/%m/%Y')
-            END AS Ultimo_Pago_c_ListaCobro,
-            CASE 
-                WHEN Ultimo_Pago_Aplicado REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN Ultimo_Pago_Aplicado
-                ELSE STR_TO_DATE(NULLIF(NULLIF(Ultimo_Pago_Aplicado, ''), '0.00'), '%d/%m/%Y')
-            END AS Ultimo_Pago_Aplicado,
-            Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, Pago, Monto_Ultimo_Pago, 
-            Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, Com_Vigente, Com_Vencida, Clabe, 
-            CASE 
-                WHEN Sig_Pago REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN Sig_Pago
-                ELSE STR_TO_DATE(NULLIF(NULLIF(Sig_Pago, ''), '0.00'), '%d/%m/%Y')
-            END AS Sig_Pago, 
-            Monto_Sig_Pago, vFondeador, Valida_Domi, 
-            vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, RFC, vMotiveExt, iPeriodsExt, vCommentExt, 
-            nRetencion, nJoPay, iMaxDays, 
-            CASE 
-                WHEN vMaxDate REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN vMaxDate
-                ELSE STR_TO_DATE(NULLIF(NULLIF(vMaxDate, ''), '0.00'), '%d/%m/%Y')
-            END AS vMaxDate, 
-            nLiquidate, nLiqPrin, nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, 
-            nLiqChaTran, nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, @FechaGenerado
-        FROM D1_Stage_Saldos_Cartera;";
+            INSERT INTO D1_Saldos_Cartera (
+                Id_Solicitud, Id_Credito, Id_Persona, Referencia, Afiliado, Nombre, Monto, Comision, 
+                Intereses_Totales, Monto_Total, Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, 
+                IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
+                Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
+                Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
+                Id_Convenio, Dependencia, 
+                Primer_Pago_Teorico,
+                Ultimo_Pago,
+                Tipo_Financiamiento, Capital_Vigente, Capital_Vencido, Intereses_Vencidos, Vencido, Sdo_Insoluto, 
+                Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, Estatus_Cartera, Estatus, Sucursal, 
+                Fecha_Desembolso,
+                Frecuencia, 
+                Primer_Pago_Real,
+                Ultimo_Pago_c_ListaCobro,
+                Ultimo_Pago_Aplicado,
+                Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, Periodos_Atraso, Pago, Monto_Ultimo_Pago, 
+                Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, Com_Vigente, Com_Vencida, Clabe, 
+                Sig_Pago,
+                Monto_Sig_Pago, vFondeador, Valida_Domi, vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, 
+                RFC, vMotiveExt, iPeriodsExt, vCommentExt, nRetencion, nJoPay, iMaxDays, 
+                vMaxDate,
+                nLiquidate, nLiqPrin, nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, 
+                nLiqMorTran, nLiqChaTran, nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, FechaGenerado
+            )
+            SELECT 
+                Id_Solicitud, Id_Credito, Id_Persona, Referencia, Afiliado, Nombre, Monto, Comision, 
+                Intereses_Totales, Monto_Total, Pagos, Amort_Pagadas, Capital_Pagado, Interes_Pagado, 
+                IVA_Int_Pagado, Cargo_PTardio_Pagado, Moratorio_Pagado, Pago_en_Exceso, Comision_Pagada, 
+                Total_Pagado, Ajustes_Capital, Saldo_Capital, Saldo_Interes, Saldo_IVA_Int, Saldo_Cargo_PTardio, 
+                Saldo_Moratorios, Saldo_Pago_Exceso, Saldo_Comision, Saldo_Total, Importe_de_Pago, 
+                Id_Convenio, Dependencia, 
+                Primer_Pago_Teorico, Ultimo_Pago, Tipo_Financiamiento, Capital_Vigente, Capital_Vencido, 
+                Intereses_Vencidos, Vencido, Sdo_Insoluto, Sdo_Total_c_ListasCobro, Sdo_Vencido_c_ListCobro, 
+                Estatus_Cartera, Estatus, Sucursal, Fecha_Desembolso, Frecuencia, Primer_Pago_Real, 
+                Ultimo_Pago_c_ListaCobro, Ultimo_Pago_Aplicado, Dias_Ultimo_Pago, Dias_Atraso, Cuotas_Atraso, 
+                Periodos_Atraso, Pago, Monto_Ultimo_Pago, Tasa_Int_Anual, Gestor, Motivo, Banco, Estado, Ciudad, 
+                Com_Vigente, Com_Vencida, Clabe, 
+                Sig_Pago, 
+                Monto_Sig_Pago, vFondeador, Valida_Domi, vAfiliateIdO, vAfiliateO, Saldo_Retencion_Adm, 
+                RFC, vMotiveExt, iPeriodsExt, vCommentExt, nRetencion, nJoPay, iMaxDays, 
+                vMaxDate, nLiquidate, nLiqPrin, nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, 
+                nLiqMorTran, nLiqChaTran, nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, @FechaGenerado
+            FROM D1_Stage_Saldos_Cartera;
+        ";
 
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -379,9 +392,15 @@ public class D1_Saldos_Cartera_Controller : Controller
             {
                 try
                 {
-                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
-                    command.Parameters.AddWithValue("@FechaGenerado", fechaGenerado);
-                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    // Primero purgar los campos de fecha vacíos en la tabla stage.
+                    var purgeCommand = new MySqlCommand(sqlPurgeCommand, connection, transaction);
+                    int purgeRows = await purgeCommand.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine($"Purge stage table: {purgeRows} rows updated.");
+
+                    // Luego, realizar el INSERT desde la tabla stage a la tabla final.
+                    var insertCommand = new MySqlCommand(sqlInsertCommand, connection, transaction);
+                    insertCommand.Parameters.AddWithValue("@FechaGenerado", fechaGenerado);
+                    int rowsAffected = await insertCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine($"Inserted {rowsAffected} rows into D1_Saldos_Cartera.");
                     await transaction.CommitAsync();
                 }

@@ -116,95 +116,171 @@ namespace GOMVC.Controllers
         /// Ejecuta la consulta SQL que transforma y consolida los datos e inserta los resultados en r3_layoutmc.
         /// Se aumenta el CommandTimeout para consultas largas.
         /// </summary>
-        private async Task<int> R3_InsertLayoutDataAsync(StringBuilder logBuilder)
+       private async Task<int> R3_InsertLayoutDataAsync(StringBuilder logBuilder)
         {
             var sql = @"
-                INSERT INTO r3_layoutmc (
-                    Credito, Cliente_Numero, Nombre, Segundo_Nombre, Primer_Apellido, Segundo_Apellido, 
-                    Fecha_de_Nacimiento, Estado_de_Nacimiento, Sexo, RFC, CURP, Nombre_de_Conyuge, 
-                    Segundo_Nombre_de_Conyuge, Primer_Apellido_de_Conyuge, Segundo_Apellido_de_Conyuge, 
-                    Calle, Numero, Interior, Entre_Calle_1, Entre_Calle_2, Colonia, Municipio, Ciudad, 
-                    Estado, Codigo_Postal, Correo_Electronico, Tel_Celular, Telefono_de_Casa, Puesto_del_Trabajo, 
-                    Centro_de_Trabajo_Dependencia, Tel_Empleo, Referencia_1, Parentesco_Ref_1, Telefono_Ref_1, 
-                    Referencia_2, Parentesco_Ref_2, Telefono_Ref_2, Referencia_3, Parentesco_Ref_3, Telefono_Ref_3, 
-                    Referencia_4, Parentesco_Ref_4, Telefono_Ref_4, F_Desembolso, Estatus, Tipo_de_Financiamiento, 
-                    Cargos_Moratorios, Vencido, Cuotas_Vencidas, Importe_de_Deuda_Original, 
-                    Primer_Pago_Real, Saldo_Total_Actual, Monto_del_Credito, Plazo_del_Credito, 
-                    Amortizaciones_Pagadas, F_Ultimo_Pago_Aplicado, Monto_Ultimo_Pago_Aplicado, 
-                    Dependencia_del_Credito, Sucursal_Otorgamiento, Dias_de_Atraso, Referencia_de_Pago, 
-                    Motivo_de_Cobranza_Nomina, Clabe_Interbancaria, Banco_Domiciliacion, Frecuencia, 
-                    Importe_de_Pago, Fecha_de_Siguiente_Pago, Saldo_Contable, Bucket, Rango_Pagado, 
-                    Producto, Tipo_de_Credito, Plaza_Zona, Estatus_Convenio, Dep_Abreviada, 
-                    Clasificacion_de_Convenio, Quebranto_Contable, Quebranto_Capital, Saldo_Quebranto, 
-                    Fecha_Quebranto, Estatus_Cartera, Total_Pagado, Saldo_en_Exceso, Porcentaje_Pagado, 
-                    Estatus_Domiciliacion, Recuperacion
-                )
+        CREATE OR REPLACE VIEW vw_R3_D1_Reciente AS
+        SELECT *
+        FROM D1_Saldos_Cartera
+        WHERE FechaGenerado = (SELECT MAX(FechaGenerado) FROM D1_Saldos_Cartera);
+
+        CREATE OR REPLACE VIEW vw_R3_D2_Reciente AS
+        SELECT *
+        FROM D2_Saldos_Contables
+        WHERE FechaGenerado = (SELECT MAX(FechaGenerado) FROM D2_Saldos_Contables);
+
+        CREATE OR REPLACE VIEW vw_R3_R1_Reciente AS
+        SELECT *
+        FROM R1_Quebrantos_Calculado
+        WHERE Fecha_Generado = (SELECT MAX(Fecha_Generado) FROM R1_Quebrantos_Calculado);
+
+        INSERT INTO r3_layoutmc (
+            Credito, Cliente_Numero, Nombre, Segundo_Nombre, Primer_Apellido, Segundo_Apellido, 
+            Fecha_de_Nacimiento, Estado_de_Nacimiento, Sexo, RFC, CURP, Nombre_de_Conyuge, 
+            Segundo_Nombre_de_Conyuge, Primer_Apellido_de_Conyuge, Segundo_Apellido_de_Conyuge, 
+            Calle, Numero, Interior, Entre_Calle_1, Entre_Calle_2, Colonia, Municipio, Ciudad, 
+            Estado, Codigo_Postal, Correo_Electronico, Tel_Celular, Telefono_de_Casa, Puesto_del_Trabajo, 
+            Centro_de_Trabajo_Dependencia, Tel_Empleo, Referencia_1, Parentesco_Ref_1, Telefono_Ref_1, 
+            Referencia_2, Parentesco_Ref_2, Telefono_Ref_2, Referencia_3, Parentesco_Ref_3, Telefono_Ref_3, 
+            Referencia_4, Parentesco_Ref_4, Telefono_Ref_4, F_Desembolso, Estatus, Tipo_de_Financiamiento, 
+            Cargos_Moratorios, Vencido, Cuotas_Vencidas, Importe_de_Deuda_Original, 
+            Primer_Pago_Real, Saldo_Total_Actual, Monto_del_Credito, Plazo_del_Credito, 
+            Amortizaciones_Pagadas, F_Ultimo_Pago_Aplicado, Monto_Ultimo_Pago_Aplicado, 
+            Dependencia_del_Credito, Sucursal_Otorgamiento, Dias_de_Atraso, Referencia_de_Pago, 
+            Motivo_de_Cobranza_Nomina, Clabe_Interbancaria, Banco_Domiciliacion, Frecuencia, 
+            Importe_de_Pago, Fecha_de_Siguiente_Pago, Saldo_Contable, Bucket, Rango_Pagado, 
+            Producto, Tipo_de_Credito, Plaza_Zona, Estatus_Convenio, Dep_Abreviada, 
+            Clasificacion_de_Convenio, Quebranto_Contable, Quebranto_Capital, Saldo_Quebranto, 
+            Fecha_Quebranto, Estatus_Cartera, Total_Pagado, Saldo_en_Exceso, Porcentaje_Pagado, 
+            Estatus_Domiciliacion, Recuperacion
+        )
+        SELECT
+            T.Id_Credito,
+            T.Id_Persona,
+            B1.vFirstName AS `Nombre`,
+            B1.vSecondName AS `Segundo Nombre`,
+            B1.vFLastName AS `Primer Apellido`,
+            B1.vSLastName AS `Segundo Apellido`,
+            STR_TO_DATE(NULLIF(B1.vBirthDate, ''), '%d/%m/%Y') AS `Fecha de Nacimiento`,
+            B1.vStateId AS `Estado de Nacimiento`,
+            B1.vOpSex AS Sexo,
+            B1.vTreasuryId AS RFC,
+            B1.vLegalId AS CURP,
+            B1.vSpFirstName AS `Nombre de Conyuge`,
+            B1.vSpSecondName AS `Segundo_Nombre_de_Conyuge`,
+            B1.vSpFLastName AS `Primer Apellido_de_Conyuge`,
+            B1.vSpSLastName AS `Segundo Apellido_de_Conyuge`,
+            B1.vStreetAd AS Calle,
+            B1.vExtNumberAd AS Numero,
+            B1.vIntNumberAd AS Interior,
+            B1.vCCornerAd AS `Entre Calle 1`,
+            B1.vCornerAd AS `Entre Calle 2`,
+            B1.vNeighborhoodAd AS Colonia,
+            B1.vTownshipAd AS Municipio,
+            B1.vCityAd AS Ciudad,
+            B1.vStateIdAd AS Estado,
+            B1.iZipAd AS `Código Postal`,
+            B1.vEMail AS `Correo Electrónico`,
+            B1.vMobile AS `Tel Celular`,
+            B1.vPhoneNumberAd AS `Teléfono de Casa`,
+            B1.vPositionJo AS `Puesto del Trabajo`,
+            B1.vCompanyJo AS `Centro de Trabajo Dependencia`,
+            B1.vPhoneNumberJo AS `Tel Empleo`,
+            C5.Referencia1 AS `Referencia 1`,
+            C5.RELACION1 AS `Parentesco Ref 1`,
+            C5.vphonenumber1 AS `Teléfono Ref 1`,
+            C5.Referencia2 AS `Referencia 2`,
+            C5.RELACION2 AS `Parentesco Ref 2`,
+            C5.vphonenumber2 AS `Teléfono Ref 2`,
+            C5.Referencia3 AS `Referencia 3`,
+            C5.RELACION3 AS `Parentesco Ref 3`,
+            C5.vphonenumber3 AS `Teléfono Ref 3`,
+            C5.Referencia4 AS `Referencia 4`,
+            C5.RELACION4 AS `Parentesco Ref 4`,
+            C5.vphonenumber4 AS `Teléfono Ref 4`,
+            T.Fecha_Desembolso AS `F_Desembolso`,
+            T.Estatus,
+            T.Tipo_Financiamiento AS `Tipo de Financiamiento`,
+            T.Saldo_Moratorios AS `Cargos Moratorios`,
+            T.Vencido,
+            T.Cuotas_Atraso AS `Cuotas Vencidas`,
+            T.Monto_Total AS `Importe de Deuda Original`,
+            T.Primer_Pago_Real AS `1er Pago Real`,
+            T.Saldo_Total AS `Saldo Total Actual`,
+            T.Monto_Total AS `Monto del Crédito`,
+            T.Pagos AS `Plazo del Crédito`,
+            T.Amort_Pagadas AS `Amortizaciones Pagadas`,
+            T.Ultimo_Pago_Aplicado AS `F. Ultimo Pago Aplicado`,
+            T.Monto_Ultimo_Pago AS `Monto Ultimo Pago Aplicado`,
+            T.Dependencia AS `Dependencia del Crédito`,
+            T.Sucursal AS `Sucursal Otorgamiento`,
+            T.Dias_Atraso AS `Días de Atraso`,
+            T.Referencia AS `Referencia de Pago`,
+            T.Motivo AS `Motivo de Cobranza (Nómina)`,
+            LEFT(T.Clabe, 19) AS `Clabe Interbancaria`,
+            T.Banco AS `Banco Domiciliación`,
+            T.Frecuencia,
+            T.Importe_de_Pago AS `Importe de Pago`,
+            T.Sig_Pago AS `Fecha de Siguiente Pago`,
+            D2.Saldo_Contable AS `Saldo Contable`,
+            T.Bucket,
+            CASE 
+                WHEN T.Porcentaje_Pagado <= 0 THEN 'FPD'
+                WHEN T.Porcentaje_Pagado > 0 AND T.Porcentaje_Pagado <= 0.25 THEN '1-25%'
+                WHEN T.Porcentaje_Pagado > 0.25 AND T.Porcentaje_Pagado <= 0.50 THEN '26-50%'
+                WHEN T.Porcentaje_Pagado > 0.50 AND T.Porcentaje_Pagado <= 0.75 THEN '51-75%'
+                WHEN T.Porcentaje_Pagado > 0.75 AND T.Porcentaje_Pagado <= 1 THEN '76-100%'
+                ELSE '76-100%'
+            END AS `Rango Pagado`,
+            FIN.Producto,
+            FIN.Financiamiento AS Tipo_de_Credito,
+            P.Plaza,
+            DEP.Estatus,
+            DEP.Abreviatura,
+            DEP.Clasificacion,
+            QC.Quebranto_Contable,
+            QC.Quebranto_Capital,
+            QC.Saldo_Q_Pagare,
+            QC.Fecha_Quebranto,
+            T.Estatus_Cartera,
+            T.Total_Pagado,
+            T.Saldo_Pago_Exceso,
+            T.Porcentaje_Pagado,
+            DOMI.Rechazo,
+            QC.Recuperacion
+        FROM
+            (
                 SELECT 
-                    pc.Id_Credito, pc.Id_Persona, 
-                    MAX(d.vFirstName), MAX(d.vSecondName), MAX(d.vFLastName), MAX(d.vSLastName),
-                    MAX(STR_TO_DATE(NULLIF(d.vBirthDate, ''), '%d/%m/%Y')),
-                    MAX(d.vStateId), MAX(d.vOpSex), MAX(d.vTreasuryId), MAX(d.vLegalId), 
-                    MAX(d.vSpFirstName), MAX(d.vSpSecondName), MAX(d.vSpFLastName), MAX(d.vSpSLastName),
-                    MAX(d.vStreetAd), MAX(d.vExtNumberAd), MAX(d.vIntNumberAd), MAX(d.vCCornerAd), MAX(d.vCornerAd),
-                    MAX(d.vNeighborhoodAd), MAX(d.vTownshipAd), MAX(d.vCityAd), MAX(d.vStateIdAd), MAX(d.iZipAd),
-                    MAX(d.vEMail), MAX(d.vMobile), MAX(d.vPhoneNumberAd), MAX(d.vPositionJo), MAX(d.vCompanyJo),
-                    MAX(d.vPhoneNumberJo), MAX(r.Referencia1), MAX(r.RELACION1), MAX(r.vphonenumber1),
-                    MAX(r.Referencia2), MAX(r.RELACION2), MAX(r.vphonenumber2), MAX(r.Referencia3), MAX(r.RELACION3),
-                    MAX(r.vphonenumber3), MAX(r.Referencia4), MAX(r.RELACION4), MAX(r.vphonenumber4),
-                    MAX(pc.Fecha_Desembolso), MAX(pc.Estatus), MAX(pc.Tipo_Financiamiento),
-                    MAX(pc.Saldo_Moratorios), MAX(pc.Vencido), MAX(pc.Cuotas_Atraso),
-                    MAX(pc.Monto_Total) AS Importe_de_Deuda_Original,
-                    MAX(pc.Primer_Pago_Real), MAX(pc.Saldo_Total), MAX(pc.Monto_Total),
-                    MAX(pc.Pagos), MAX(pc.Amort_Pagadas), MAX(pc.Ultimo_Pago), MAX(pc.Monto_Ultimo_Pago),
-                    MAX(pc.Dependencia), MAX(pc.Sucursal), MAX(pc.Dias_Atraso), MAX(pc.Referencia), MAX(pc.Motivo),
-                    MAX(LEFT(pc.Clabe, 18)),
-                    MAX(pc.Banco), MAX(pc.Frecuencia), MAX(pc.Importe_de_Pago), MAX(pc.Sig_Pago), MAX(pc.Saldo_Capital),
+                    *,
+                    ROUND(
+                    COALESCE(
+                        CASE 
+                        WHEN Estatus = 'Castigado' THEN (Total_Pagado / NULLIF(Importe_de_Pago, 0)) / NULLIF(Pagos, 0)
+                        ELSE Amort_Pagadas / NULLIF(Pagos, 0)
+                        END, 0
+                    ), 2
+                    ) AS Porcentaje_Pagado,
                     CASE 
-                        WHEN MAX(pc.Estatus) = 'Cerrado' THEN 'Cerrado'
-                        WHEN MAX(pc.Estatus) = 'Castigado' THEN 'Castigado'
-                        WHEN MAX(pc.Estatus) = 'Activo' AND MAX(pc.Dias_Atraso) = 0 THEN '0'
-                        WHEN MAX(pc.Dias_Atraso) BETWEEN 1 AND 30 THEN '1-30'
-                        WHEN MAX(pc.Dias_Atraso) BETWEEN 31 AND 60 THEN '31-60'
-                        WHEN MAX(pc.Dias_Atraso) BETWEEN 61 AND 90 THEN '61-90'
-                        WHEN MAX(pc.Dias_Atraso) BETWEEN 91 AND 120 THEN '91-120'
-                        ELSE '121+'
-                    END,
-                    CASE 
-                        WHEN MAX(pc.Porcentaje_Pagado) <= 0 THEN 'FPD'
-                        WHEN MAX(pc.Porcentaje_Pagado) > 0 AND MAX(pc.Porcentaje_Pagado) <= 0.25 THEN '1-25%'
-                        WHEN MAX(pc.Porcentaje_Pagado) > 0.25 AND MAX(pc.Porcentaje_Pagado) <= 0.50 THEN '26-50%'
-                        WHEN MAX(pc.Porcentaje_Pagado) > 0.50 AND MAX(pc.Porcentaje_Pagado) <= 0.75 THEN '51-75%'
-                        WHEN MAX(pc.Porcentaje_Pagado) > 0.75 AND MAX(pc.Porcentaje_Pagado) <= 1 THEN '76-100%'
-                        ELSE '76-100%'
-                    END,
-                    MAX(fin.Producto),
-                    MAX(fin.Financiamiento) AS Tipo_de_Credito,
-                    MAX(p.Plaza), MAX(dep.Estatus), MAX(dep.Abreviatura), MAX(dep.Clasificacion),
-                    MAX(qc.Quebranto_Contable), MAX(qc.Quebranto_Capital), MAX(qc.Saldo_Q_Pagare), MAX(qc.Fecha_Quebranto),
-                    MAX(pc.Estatus_Cartera), MAX(pc.Total_Pagado), MAX(pc.Saldo_Pago_Exceso), MAX(pc.Porcentaje_Pagado),
-                    MAX(domi.Rechazo), MAX(qc.Recuperacion)
-                FROM 
-                    (
-                    SELECT 
-                        sc.*,
-                        ROUND(
-                            COALESCE(
-                                CASE 
-                                    WHEN sc.Estatus = 'Castigado' THEN (sc.Total_Pagado / NULLIF(sc.Importe_de_Pago, 0)) / NULLIF(sc.Pagos, 0)
-                                    ELSE sc.Amort_Pagadas / NULLIF(sc.Pagos, 0)
-                                END, 0)
-                        ,2) AS Porcentaje_Pagado
-                    FROM D1_Saldos_Cartera sc
-                    ) pc
-                INNER JOIN C2_Financiamiento fin ON pc.Tipo_Financiamiento = fin.Tipo_Financiamiento
-                INNER JOIN B1_Demograficos d ON pc.Id_Persona = d.Id_Persona
-                LEFT JOIN CI3_Plazas p ON pc.Id_Credito = p.Id_Credito
-                LEFT JOIN R1_Quebrantos_Calculado qc ON pc.Id_Credito = qc.Operacion
-                LEFT JOIN C5_Referencias r ON pc.Id_Persona = r.Id_Persona
-                LEFT JOIN C1_Dependencia dep ON pc.Dependencia = dep.Dependencia
-                LEFT JOIN CI2_Estatus_Domi domi ON pc.Id_Credito = domi.Id_Credito 
-                GROUP BY pc.Id_Credito, pc.Id_Persona;
-            ";
+                        WHEN Estatus = 'Activo' AND Dias_Atraso = 0 THEN '0'
+                        WHEN Estatus = 'Activo' AND Dias_Atraso BETWEEN 1 AND 30 THEN '1 a 30'
+                        WHEN Estatus = 'Activo' AND Dias_Atraso BETWEEN 31 AND 60 THEN '31 a 60'
+                        WHEN Estatus = 'Activo' AND Dias_Atraso BETWEEN 61 AND 90 THEN '61 a 90'
+                        WHEN Estatus = 'Activo' AND Dias_Atraso BETWEEN 91 AND 120 THEN '91 a 120'
+                        WHEN Estatus = 'Activo' AND Dias_Atraso BETWEEN 121 AND 150 THEN '121 a 150'
+                        WHEN Estatus = 'Activo' AND Dias_Atraso BETWEEN 151 AND 180 THEN '151 a 180'
+                        WHEN Estatus = 'Activo' AND Dias_Atraso >= 181 THEN '181+'
+                        ELSE Estatus
+                    END AS Bucket
+                FROM vw_R3_D1_Reciente
+            ) AS T
+        LEFT JOIN vw_R3_D2_Reciente D2 ON T.Id_Credito = D2.Id_Credito
+        LEFT JOIN B1_Demograficos B1 ON T.Id_Persona = B1.Id_Persona
+        LEFT JOIN C5_Referencias C5 ON T.Id_Persona = C5.Id_Persona
+        LEFT JOIN C2_Financiamiento FIN ON T.Tipo_Financiamiento = FIN.Tipo_Financiamiento
+        LEFT JOIN CI3_Plazas P ON T.Id_Credito = P.Id_Credito
+        LEFT JOIN C1_Dependencia DEP ON T.Dependencia = DEP.Dependencia
+        LEFT JOIN vw_R3_R1_Reciente QC ON T.Id_Credito = QC.Operacion
+        LEFT JOIN CI2_Estatus_Domi DOMI ON T.Id_Credito = DOMI.Id_Credito;";
 
             using (var connection = new MySqlConnection(_connectionString))
             {

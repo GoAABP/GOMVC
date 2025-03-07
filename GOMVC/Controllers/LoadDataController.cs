@@ -170,13 +170,6 @@ public class LoadDataController : Controller
                     result = await quebrantosCalculadoController.D6_ProcessQuebrantosCalculationsAndExport();
                     break;
                 
-                case "r1_quebrantos_calculado_specific_date":
-                    var quebrantosCalculadoControllerb = new R1_Quebrantos_Calculado_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<R1_Quebrantos_Calculado_Controller>>(),
-                        _configuration);
-                    result = await quebrantosCalculadoControllerb.R1_ProcessQuebrantosCalculationsAndExport_Hardcoded();
-                    break;
-                
                 case "r3_layoutmc":
                     var layout_Mc_Controller = new R3_LayoutMc_Controller(
                         HttpContext.RequestServices.GetRequiredService<ILogger<R3_LayoutMc_Controller>>(),
