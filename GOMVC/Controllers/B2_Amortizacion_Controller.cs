@@ -76,50 +76,74 @@ public class B2_Amortizacion_Controller : Controller
             {
                 try
                 {
-                    string sqlInsert = @"
-                        INSERT INTO B2_Amortizaciones (
-                            iCreditId, 
-                            iPayment, 
-                            vDueDate, 
-                            nPrincipal, 
-                            nInterest, 
-                            nTax, 
-                            dtInsert
-                        )
-                        SELECT 
-                            iCreditId,
-                            iPayment,
-                            CASE 
-                                WHEN TRIM(vDueDate) = '' THEN NULL
-                                WHEN vDueDate REGEXP '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' THEN STR_TO_DATE(vDueDate, '%d/%m/%Y')
-                                WHEN vDueDate REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN STR_TO_DATE(vDueDate, '%Y-%m-%d')
-                                ELSE NULL
-                            END AS vDueDate,
-                            nPrincipal,
-                            nInterest,
-                            nTax,
-                            CASE 
-                                WHEN TRIM(dtInsert) = '' THEN NULL
-                                WHEN dtInsert REGEXP '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}$' THEN STR_TO_DATE(dtInsert, '%d/%m/%Y %H:%i:%s')
-                                WHEN dtInsert REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$' THEN STR_TO_DATE(dtInsert, '%Y-%m-%d %H:%i:%s')
-                                ELSE NULL
-                            END AS dtInsert
-                        FROM B2_Stage_Amortizaciones;";
+                    // Obtener el total de registros en la tabla de staging
+                    var countCmd = new MySqlCommand("SELECT COUNT(*) FROM B2_Stage_Amortizaciones", connection, transaction);
+                    int totalRecords = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+                    int batchSize = 1000; // puedes ajustar este valor según tus necesidades
+                    int batches = (totalRecords + batchSize - 1) / batchSize;
+                    logBuilder.AppendLine($"Total de registros a procesar: {totalRecords} en {batches} lotes.");
 
-                    using (var command = new MySqlCommand(sqlInsert, connection, transaction))
+                    for (int i = 0; i < batches; i++)
                     {
-                        int rowsAffected = await command.ExecuteNonQueryAsync();
-                        logBuilder.AppendLine($"B2_Inserted {rowsAffected} rows into B2_Amortizaciones.");
-                        _logger.LogInformation($"B2_Inserted {rowsAffected} rows into B2_Amortizaciones.");
-                    }
+                        int offset = i * batchSize;
+                        // Seleccionar un lote de registros
+                        var selectCmd = new MySqlCommand(
+                            "SELECT iCreditId, iPayment, vDueDate, nPrincipal, nInterest, nTax, dtInsert " +
+                            "FROM B2_Stage_Amortizaciones " +
+                            "LIMIT @batchSize OFFSET @offset", connection, transaction);
+                        selectCmd.Parameters.AddWithValue("@batchSize", batchSize);
+                        selectCmd.Parameters.AddWithValue("@offset", offset);
 
+                        var tuples = new List<string>();
+                        using (var reader = await selectCmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                int creditId = reader.GetInt32(0);
+                                // Manejar valores nulos en payment
+                                string payment = reader.IsDBNull(1) ? "NULL" : reader.GetInt32(1).ToString();
+
+                                // Para las fechas, se construye la conversión similar a la original
+                                string vDueDate = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                                string dtInsert = reader.IsDBNull(6) ? "" : reader.GetString(6);
+
+                                string principal = reader.IsDBNull(3) ? "NULL" : reader.GetDecimal(3).ToString();
+                                string interest = reader.IsDBNull(4) ? "NULL" : reader.GetDecimal(4).ToString();
+                                string tax = reader.IsDBNull(5) ? "NULL" : reader.GetDecimal(5).ToString();
+
+                                // Construir la tupla para el INSERT, aplicando la conversión de fechas en SQL
+                                string tuple = $"({creditId}, {payment}, " +
+                                    $"CASE WHEN TRIM('{vDueDate}') = '' THEN NULL " +
+                                    $"WHEN '{vDueDate}' REGEXP '^[0-9]{{2}}/[0-9]{{2}}/[0-9]{{4}}$' THEN STR_TO_DATE('{vDueDate}', '%d/%m/%Y') " +
+                                    $"WHEN '{vDueDate}' REGEXP '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' THEN STR_TO_DATE('{vDueDate}', '%Y-%m-%d') " +
+                                    $"ELSE NULL END, " +
+                                    $"{principal}, {interest}, {tax}, " +
+                                    $"CASE WHEN TRIM('{dtInsert}') = '' THEN NULL " +
+                                    $"WHEN '{dtInsert}' REGEXP '^[0-9]{{2}}/[0-9]{{2}}/[0-9]{{4}} [0-9]{{2}}:[0-9]{{2}}:[0-9]{{2}}$' THEN STR_TO_DATE('{dtInsert}', '%d/%m/%Y %H:%i:%s') " +
+                                    $"WHEN '{dtInsert}' REGEXP '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}} [0-9]{{2}}:[0-9]{{2}}:[0-9]{{2}}$' THEN STR_TO_DATE('{dtInsert}', '%Y-%m-%d %H:%i:%s') " +
+                                    $"ELSE NULL END)";
+                                tuples.Add(tuple);
+                            }
+                        }
+                        // Si se obtuvieron registros en el lote, construir e insertar
+                        if (tuples.Any())
+                        {
+                            string insertSql = "INSERT INTO B2_Amortizaciones (iCreditId, iPayment, vDueDate, nPrincipal, nInterest, nTax, dtInsert) VALUES " +
+                                string.Join(", ", tuples);
+                            using (var insertCmd = new MySqlCommand(insertSql, connection, transaction))
+                            {
+                                int rowsAffected = await insertCmd.ExecuteNonQueryAsync();
+                                logBuilder.AppendLine($"Lote {i + 1}/{batches}: Insertados {rowsAffected} registros.");
+                            }
+                        }
+                    }
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    logBuilder.AppendLine($"B2_Error during insert: {ex.Message}");
-                    _logger.LogError(ex, "B2_Error during insert into B2_Amortizaciones.");
+                    logBuilder.AppendLine($"Error durante la inserción: {ex.Message}");
+                    _logger.LogError(ex, "Error al insertar en B2_Amortizaciones.");
                     throw;
                 }
             }

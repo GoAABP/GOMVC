@@ -39,6 +39,7 @@ public class LoadDataController : Controller
         var activities = new List<string>
         {
             "Backup Zell",
+            "B2_Amortizaciones",
             "C1_Dependencias",
             "C2_Financiamientos",
             "C3_Motios",
@@ -57,6 +58,7 @@ public class LoadDataController : Controller
             "D8_Sistema",
             "D9_Gestores_Area",
             "I2_Campaña_Quebrantos",
+            "INT_MDC",
             "R1_Quebrantos_Calculado_Most_Recent",
             "R1_Quebrantos_Calculado_Specific_Date",
             "R3_LayoutMc"
@@ -78,6 +80,13 @@ public class LoadDataController : Controller
                         HttpContext.RequestServices.GetRequiredService<ILogger<Backup_Zell_Controller>>(),
                         _configuration);
                     result = await demograficsController.ProcessBackup();
+                    break;
+
+                case "b2_amortizaciones":
+                    var b2amortizacionescontroller = new B2_Amortizacion_Controller(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<B2_Amortizacion_Controller>>(),
+                        _configuration);
+                    result = await b2amortizacionescontroller.B2_Process();
                     break;
 
                 case "d1_saldos_cartera":
@@ -161,6 +170,13 @@ public class LoadDataController : Controller
                         HttpContext.RequestServices.GetRequiredService<ILogger<I2_Campaña_Quebrantos_Controller>>(),
                         _configuration);
                     result = await campañasController.Process();
+                    break;
+
+                case "int_mdc":
+                    var intmdccontroller = new INT_MDC_CONTROLLER(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<INT_MDC_CONTROLLER>>(),
+                        _configuration);
+                    result = await intmdccontroller.ProcessAll();
                     break;
 
                 case "r1_quebrantos_calculado_most_recent":
