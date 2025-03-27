@@ -43,9 +43,10 @@ namespace GOMVC.Controllers
 
             try
             {
-                // 0. Truncar las tablas de staging
-                await TruncateTableAsync("INT2_STAGE_MDC_SC", logBuilder);
+                // 0. Truncar la tabla de staging para TR
                 await TruncateTableAsync("INT1_STAGE_MDC_TR", logBuilder);
+                // (Opcional) Truncar la tabla final si se desea reiniciar
+                // await TruncateTableAsync("INT1_MDC_TR", logBuilder);
 
                 // 1. Buscar archivos planos en _filesDirectory
                 var scFiles = Directory.GetFiles(_filesDirectory, "mdc_*_sc.txt");
@@ -57,12 +58,15 @@ namespace GOMVC.Controllers
                     return NotFound(logBuilder.ToString());
                 }
 
+                // Archivos SC: se cargan directamente en la tabla final INT2_MDC_SC
                 foreach (var file in scFiles)
                 {
                     logBuilder.AppendLine($"Procesando archivo SC: {file}");
-                    await BulkInsertFileAsync(file, "INT2_STAGE_MDC_SC", logBuilder);
+                    await BulkInsertFileAsync(file, "INT2_MDC_SC", logBuilder);
                     MoveFile(file, _processedFolder, logBuilder);
                 }
+
+                // Archivos TR: se cargan en la tabla de staging INT1_STAGE_MDC_TR
                 foreach (var file in trFiles)
                 {
                     logBuilder.AppendLine($"Procesando archivo TR: {file}");
@@ -70,14 +74,11 @@ namespace GOMVC.Controllers
                     MoveFile(file, _processedFolder, logBuilder);
                 }
 
-                // 2. Insertar registros nuevos en INT1_MDC desde INT1_STAGE_MDC_TR
-                await InsertFinalAsync(logBuilder);
+                // 2. Insertar registros de la tabla staging en la tabla final reordenando las columnas
+                await InsertFinalFromStageAsync(logBuilder);
 
-                // 3. Actualizar registros en INT1_MDC (varios updates agrupados en secuencia)
-                await UpdateFinalAsync(logBuilder);
-                await UpdatePropiedadAsync(logBuilder);
-                await UpdateRangoMOPAsync(logBuilder);
-                await UpdateBCScoreAsync(logBuilder);
+                // 3. Ejecutar un UPDATE combinado en la tabla final para actualizar los campos derivados
+                await CombinedUpdateFinalAsync(logBuilder);
 
                 logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Proceso ProcessAll completado exitosamente.");
                 return Ok(logBuilder.ToString());
@@ -86,6 +87,51 @@ namespace GOMVC.Controllers
             {
                 logBuilder.AppendLine($"Error en ProcessAll: {ex.Message}");
                 _logger.LogError(ex, "Error en ProcessAll en INT_MDC_CONTROLLER.");
+                return StatusCode(500, logBuilder.ToString());
+            }
+        }
+
+        // Nuevo endpoint para procesar archivos SC mediante staging
+        [HttpPost("ProcessSC")]
+        public async Task<IActionResult> ProcessSC()
+        {
+            string logFileName = "INT2_MDC_SC_Process.log";
+            string logPath = Path.Combine(_logsFolder, logFileName);
+            var logBuilder = new StringBuilder();
+            logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Proceso ProcessSC iniciado.");
+
+            try
+            {
+                // 0. Truncar la tabla de staging para SC
+                await TruncateTableAsync("INT2_STAGE_MDC_SC", logBuilder);
+
+                // 1. Buscar archivos planos SC en _filesDirectory (ej. "mdc_*_sc.txt")
+                var scFiles = Directory.GetFiles(_filesDirectory, "mdc_*_sc.txt");
+
+                if (scFiles.Length == 0)
+                {
+                    logBuilder.AppendLine("No se encontraron archivos SC.");
+                    return NotFound(logBuilder.ToString());
+                }
+
+                // 2. Procesar cada archivo SC: BULK INSERT a la tabla de staging y mover el archivo procesado.
+                foreach (var file in scFiles)
+                {
+                    logBuilder.AppendLine($"Procesando archivo SC: {file}");
+                    await BulkInsertFileAsync(file, "INT2_STAGE_MDC_SC", logBuilder);
+                    MoveFile(file, _processedFolder, logBuilder);
+                }
+
+                // 3. Insertar registros de la tabla staging en la tabla final INT2_MDC_SC
+                await InsertFinalFromStageSC(logBuilder);
+
+                logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Proceso ProcessSC completado exitosamente.");
+                return Ok(logBuilder.ToString());
+            }
+            catch (Exception ex)
+            {
+                logBuilder.AppendLine($"Error en ProcessSC: {ex.Message}");
+                _logger.LogError(ex, "Error en ProcessSC.");
                 return StatusCode(500, logBuilder.ToString());
             }
         }
@@ -120,7 +166,7 @@ namespace GOMVC.Controllers
                 await connection.OpenAsync();
                 using (var command = new MySqlCommand(sql, connection))
                 {
-                    command.CommandTimeout = 1800; // Timeout aumentado
+                    command.CommandTimeout = 1800;
                     int rowsAffected = await command.ExecuteNonQueryAsync();
                     logBuilder.AppendLine($"Archivo {Path.GetFileName(filePath)}: insertados {rowsAffected} registros en {targetTable}.");
                 }
@@ -146,36 +192,28 @@ namespace GOMVC.Controllers
             }
         }
 
-        private async Task InsertFinalAsync(StringBuilder logBuilder)
+        // Inserta en la tabla final INT1_MDC_TR reordenando las columnas provenientes de la tabla de staging INT1_STAGE_MDC_TR
+        private async Task InsertFinalFromStageAsync(StringBuilder logBuilder)
         {
-            // Usamos REPLACE para convertir abreviaturas de meses en español a inglés.
-            string insertFinalSql = @"
-                INSERT INTO INT1_MDC (
-                    ID_PERSONA,
+            string sql = @"
+                INSERT INTO INT1_MDC_TR (
                     ID_CREDITO,
                     Fecha_de_apertura,
-                    Estatus,
                     Fecha_de_consulta_MDC,
                     Indicador_TL,
                     Fecha_de_integracion,
                     ID_Buro,
                     Clave_de_usuario,
                     Otorgante,
-                    Otorgante_Real,
-                    Propiedad,
                     Telefono_Otorgante,
                     No_Cuenta,
                     Responsabilidad,
-                    Responsabilidad_Real,
                     Tipo_de_Cuenta,
-                    Tipo_de_cuenta_Real,
                     Tipo_de_Contrato,
-                    Tipo_de_contrato_Real,
                     Moneda,
                     Importe_Avaluo,
                     No_de_pagos,
                     Frecuencia_de_pagos,
-                    Frecuencia_Real,
                     Monto_a_pagar,
                     Fecha_de_ultimo_pago,
                     Fecha_de_ultima_compra,
@@ -193,7 +231,6 @@ namespace GOMVC.Controllers
                     Saldo_vencido,
                     No_Pagos_vencidos,
                     Mop_actual,
-                    Rango_MOP,
                     Historico_de_pagos,
                     Claves_de_observacion,
                     No_Total_de_pagos_revisados,
@@ -202,38 +239,43 @@ namespace GOMVC.Controllers
                     No_Total_de_pagos_calificados_MOP_04,
                     No_Total_de_pagos_calificados_MOP_05,
                     Monto_max_morosidad,
-                    Max_morosidad,
-                    BC_Score
+                    Max_morosidad
                 )
-                SELECT
-                    NULL,
-                    No_Referencia AS ID_CREDITO,
+                SELECT 
+                    No_Referencia,
                     Fecha_de_apertura,
-                    NULL AS Estatus,
                     STR_TO_DATE(
-                        REPLACE(REPLACE(Fecha_de_consulta_MDC, 'ene', 'jan'), 'Ene', 'Jan'),
-                        '%d-%b-%Y'
+                      REPLACE(
+                        REPLACE(
+                          REPLACE(
+                            REPLACE(
+                              REPLACE(
+                                REPLACE(
+                                  REPLACE(
+                                    REPLACE(Fecha_de_consulta_MDC, 'dic','dec'),
+                                  'Dic','Dec'),
+                                'ene','jan'),
+                              'Ene','Jan'),
+                            'abr','apr'),
+                          'Abr','Apr'),
+                        'ago','aug'),
+                      'Ago','Aug'),
+                    '%d-%b-%Y'
                     ) AS Fecha_de_consulta_MDC,
                     Indicador_TL,
                     Fecha_de_integracion,
                     ID_Buro,
                     Clave_de_usuario,
                     Otorgante,
-                    NULL,
-                    NULL,
                     Telefono_Otorgante,
                     No_Cuenta,
                     Responsabilidad,
-                    NULL,
                     Tipo_de_Cuenta,
-                    NULL,
                     Tipo_de_Contrato,
-                    NULL,
                     Moneda,
                     Importe_Avaluo,
                     No_de_pagos,
                     Frecuencia_de_pagos,
-                    NULL,
                     Monto_a_pagar,
                     Fecha_de_ultimo_pago,
                     Fecha_de_ultima_compra,
@@ -251,7 +293,6 @@ namespace GOMVC.Controllers
                     Saldo_vencido,
                     No_Pagos_vencidos,
                     Mop_actual,
-                    NULL,
                     Historico_de_pagos,
                     Claves_de_observacion,
                     No_Total_de_pagos_revisados,
@@ -260,194 +301,110 @@ namespace GOMVC.Controllers
                     No_Total_de_pagos_calificados_MOP_04,
                     No_Total_de_pagos_calificados_MOP_05,
                     Monto_max_morosidad,
-                    Max_morosidad,
-                    NULL AS BC_Score
-                FROM INT1_STAGE_MDC_TR
-                WHERE STR_TO_DATE(
-                        REPLACE(REPLACE(Fecha_de_consulta_MDC, 'ene', 'jan'), 'Ene', 'Jan'),
-                        '%d-%b-%Y'
-                ) NOT IN (
-                    SELECT Fecha_de_consulta_MDC FROM INT1_MDC
-                );";
-
+                    Max_morosidad
+                FROM INT1_STAGE_MDC_TR;";
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                using (var command = new MySqlCommand(insertFinalSql, connection))
+                using (var command = new MySqlCommand(sql, connection))
                 {
                     command.CommandTimeout = 1800;
                     int rowsInserted = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Final Insert: se insertaron {rowsInserted} registros en INT1_MDC.");
+                    logBuilder.AppendLine($"Insert final (TR): se insertaron {rowsInserted} registros en INT1_MDC_TR desde staging.");
                 }
             }
         }
 
-        private async Task UpdateFinalAsync(StringBuilder logBuilder)
+        // Inserta en la tabla final INT2_MDC_SC desde la tabla de staging INT2_STAGE_MDC_SC
+        private async Task InsertFinalFromStageSC(StringBuilder logBuilder)
         {
-            // Actualiza INT1_MDC: ID_PERSONA, Estatus y Otorgante_Real desde D1_Saldos_Cartera
-            string updateSql = @"
-                UPDATE INT1_MDC m
-                INNER JOIN D1_Saldos_Cartera d ON d.Id_Credito = m.ID_CREDITO
+            string sql = @"
+                INSERT INTO INT2_MDC_SC (
+                    CuentaReferencia,
+                    FechaConsulta,
+                    ScoreIndicator,
+                    ScoreName,
+                    ScoreCode,
+                    ScoreValue,
+                    ReasonCode1,
+                    ReasonCode2,
+                    ReasonCode3,
+                    ReasonCode4,
+                    ErrorCode
+                )
+                SELECT 
+                    CuentaReferencia,
+                    FechaConsulta,
+                    ScoreIndicator,
+                    ScoreName,
+                    ScoreCode,
+                    ScoreValue,
+                    ReasonCode1,
+                    ReasonCode2,
+                    ReasonCode3,
+                    ReasonCode4,
+                    ErrorCode
+                FROM INT2_STAGE_MDC_SC;";
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new MySqlCommand(sql, connection))
+                {
+                    command.CommandTimeout = 1800;
+                    int rowsInserted = await command.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine($"Insert final (SC): se insertaron {rowsInserted} registros en INT2_MDC_SC desde INT2_STAGE_MDC_SC.");
+                }
+            }
+        }
+
+        // Ejecuta un UPDATE combinado en la tabla final para actualizar los campos derivados.
+        private async Task CombinedUpdateFinalAsync(StringBuilder logBuilder)
+        {
+            string sql = @"
+                UPDATE INT1_MDC_TR m
+                LEFT JOIN D1_Saldos_Cartera d ON d.Id_Credito = m.ID_CREDITO
+                LEFT JOIN INTCAT1_Responsabilidad r ON r.Codigo = m.Responsabilidad
+                LEFT JOIN INTCAT3_TipoCuenta t ON t.Codigo = m.Tipo_de_Cuenta
+                LEFT JOIN INTCAT2_TipoContrato c ON c.Codigo = m.Tipo_de_Contrato
+                LEFT JOIN INTCAT4_FrecuenciaPago f ON f.Codigo = m.Frecuencia_de_pagos
                 SET 
                     m.ID_PERSONA = d.Id_Persona,
                     m.Estatus = CASE 
-                                   WHEN m.Fecha_de_cierre = '1900-01-01' THEN 'abierto'
-                                   ELSE 'cerrado'
+                                  WHEN m.Fecha_de_cierre = '1900-01-01' THEN 'abierto'
+                                  ELSE 'cerrado'
                                 END,
                     m.Otorgante_Real = CASE 
-                                           WHEN m.Otorgante IN ('Financiera', 'MicroFinanciera', 'Monto Facil') THEN 'Financiera'
-                                           WHEN m.Otorgante = 'Banco' THEN 'Banco'
-                                           ELSE 'Otro'
-                                       END
-                WHERE d.Id_Persona IS NOT NULL;";
+                                          WHEN m.Otorgante IN ('Financiera', 'MicroFinanciera', 'Monto Facil') THEN 'Financiera'
+                                          WHEN m.Otorgante = 'Banco' THEN 'Banco'
+                                          ELSE 'Otro'
+                                       END,
+                    m.Responsabilidad_Real = r.Descripcion,
+                    m.Tipo_de_cuenta_Real = t.Descripcion,
+                    m.Tipo_de_contrato_Real = c.Descripcion,
+                    m.Frecuencia_Real = f.Descripcion,
+                    m.Propiedad = CASE
+                                    WHEN m.Tipo_de_contrato_Real IN ('Bienes raices', 'Mejoras a la casa') THEN 'Hipoteca'
+                                    WHEN m.Tipo_de_contrato_Real = 'compra de automovil' THEN 'Auto'
+                                    WHEN m.Otorgante = 'Automotriz' THEN 'Auto'
+                                    WHEN m.No_Cuenta = 'Automovil' THEN 'Auto'
+                                    WHEN m.Otorgante IN ('Bienes raices', 'Hipotecagobierno', 'Hipotecaria') THEN 'Hipotecario'
+                                    WHEN m.No_Cuenta IN ('Hipoteca', 'Bienes raices', 'Mejoras a la casa') THEN 'Hipotecario'
+                                    ELSE m.Propiedad
+                                  END,
+                    m.Rango_MOP = CASE
+                                    WHEN m.Mop_actual IN ('UR', '00', '01', '02') THEN '01, 02'
+                                    WHEN m.Mop_actual IN ('03', '04', '05', '06', '07') THEN '03 - 07'
+                                    WHEN m.Mop_actual IN ('96', '97', '98', '99') THEN '96 - 97'
+                                    ELSE m.Rango_MOP
+                                  END;";
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                using (var command = new MySqlCommand(updateSql, connection))
+                using (var command = new MySqlCommand(sql, connection))
                 {
                     command.CommandTimeout = 1800;
                     int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update: se actualizaron {rowsUpdated} registros en INT1_MDC (ID_PERSONA, Estatus, Otorgante_Real).");
-                }
-            }
-
-            // Actualizar Responsabilidad_Real desde INTCAT1_Responsabilidad
-            string updateRespSql = @"
-                UPDATE INT1_MDC m
-                INNER JOIN INTCAT1_Responsabilidad cat ON cat.Codigo = m.Responsabilidad
-                SET m.Responsabilidad_Real = cat.Descripcion;";
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(updateRespSql, connection))
-                {
-                    command.CommandTimeout = 1800;
-                    int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update Responsabilidad: se actualizaron {rowsUpdated} registros (Responsabilidad_Real).");
-                }
-            }
-
-            // Actualizar Tipo_de_cuenta_Real desde INTCAT3_TipoCuenta
-            string updateTipoCuentaSql = @"
-                UPDATE INT1_MDC m
-                INNER JOIN INTCAT3_TipoCuenta cat ON cat.Codigo = m.Tipo_de_Cuenta
-                SET m.Tipo_de_cuenta_Real = cat.Descripcion;";
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(updateTipoCuentaSql, connection))
-                {
-                    command.CommandTimeout = 1800;
-                    int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update Tipo de Cuenta: se actualizaron {rowsUpdated} registros (Tipo_de_cuenta_Real).");
-                }
-            }
-
-            // Actualizar Tipo_de_contrato_Real desde INTCAT2_TipoContrato
-            string updateTipoContratoSql = @"
-                UPDATE INT1_MDC m
-                INNER JOIN INTCAT2_TipoContrato cat ON cat.Codigo = m.Tipo_de_Contrato
-                SET m.Tipo_de_contrato_Real = cat.Descripcion;";
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(updateTipoContratoSql, connection))
-                {
-                    command.CommandTimeout = 1800;
-                    int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update Tipo de Contrato: se actualizaron {rowsUpdated} registros (Tipo_de_contrato_Real).");
-                }
-            }
-
-            // Actualizar Frecuencia_Real desde INTCAT4_FrecuenciaPago
-            string updateFrecuenciaSql = @"
-                UPDATE INT1_MDC m
-                INNER JOIN INTCAT4_FrecuenciaPago cat ON cat.Codigo = m.Frecuencia_de_pagos
-                SET m.Frecuencia_Real = cat.Descripcion;";
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(updateFrecuenciaSql, connection))
-                {
-                    command.CommandTimeout = 1800;
-                    int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update Frecuencia: se actualizaron {rowsUpdated} registros (Frecuencia_Real).");
-                }
-            }
-        }
-
-        private async Task UpdateRangoMOPAsync(StringBuilder logBuilder)
-        {
-            string updateRangoMOPSql = @"
-                UPDATE INT1_MDC
-                SET Rango_MOP = CASE
-                    WHEN Mop_actual IN ('UR', '0', '01', '02') THEN '01, 02'
-                    WHEN Mop_actual IN ('03', '04', '05', '06', '07') THEN '03 - 07'
-                    WHEN Mop_actual IN ('96', '97', '98', '99') THEN '96 - 97'
-                    ELSE Rango_MOP
-                END;";
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(updateRangoMOPSql, connection))
-                {
-                    command.CommandTimeout = 1800;
-                    int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update Rango_MOP: se actualizaron {rowsUpdated} registros.");
-                }
-            }
-        }
-
-        private async Task UpdatePropiedadAsync(StringBuilder logBuilder)
-        {
-            // Actualiza Propiedad en INT1_MDC según condiciones:
-            // - Si Tipo_de_contrato_Real IN ('Bienes raices', 'Mejoras a la casa') -> 'Hipoteca'
-            // - Si Tipo_de_contrato_Real = 'compra de automovil' -> 'Auto'
-            // - Si Otorgante = 'Automotriz' -> 'Auto'
-            // - Si No_Cuenta = 'Automovil' -> 'Auto'
-            // - Si Otorgante IN ('Bienes raices', 'Hipotecagobierno', 'Hipotecaria') -> 'Hipotecario'
-            // - Si No_Cuenta IN ('Hipoteca', 'Bienes raices', 'Mejoras a la casa') -> 'Hipotecario'
-            // - Sino, se asigna NULL.
-            string updatePropiedadSql = @"
-                UPDATE INT1_MDC
-                SET Propiedad = CASE
-                    WHEN Tipo_de_contrato_Real IN ('Bienes raices', 'Mejoras a la casa') THEN 'Hipoteca'
-                    WHEN Tipo_de_contrato_Real = 'compra de automovil' THEN 'Auto'
-                    WHEN Otorgante = 'Automotriz' THEN 'Auto'
-                    WHEN No_Cuenta = 'Automovil' THEN 'Auto'
-                    WHEN Otorgante IN ('Bienes raices', 'Hipotecagobierno', 'Hipotecaria') THEN 'Hipotecario'
-                    WHEN No_Cuenta IN ('Hipoteca', 'Bienes raices', 'Mejoras a la casa') THEN 'Hipotecario'
-                    ELSE NULL
-                END;";
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(updatePropiedadSql, connection))
-                {
-                    command.CommandTimeout = 1800;
-                    int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update Propiedad: se actualizaron {rowsUpdated} registros en INT1_MDC (Propiedad).");
-                }
-            }
-        }
-
-        private async Task UpdateBCScoreAsync(StringBuilder logBuilder)
-        {
-            // Actualizar BC_Score: se cruza INT1_MDC con INT2_STAGE_MDC_SC
-            // donde ID_CREDITO = CuentaReferencia y ScoreName = 'BC SCORE'
-            string updateBCScoreSql = @"
-                UPDATE INT1_MDC m
-                INNER JOIN INT2_STAGE_MDC_SC s ON m.ID_CREDITO = s.CuentaReferencia
-                SET m.BC_Score = s.ScoreValue
-                WHERE s.ScoreName = 'BC SCORE';";
-            using (var connection = new MySqlConnection(_connectionString))
-            {
-                await connection.OpenAsync();
-                using (var command = new MySqlCommand(updateBCScoreSql, connection))
-                {
-                    command.CommandTimeout = 1800;
-                    int rowsUpdated = await command.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Update BC_Score: se actualizaron {rowsUpdated} registros en INT1_MDC (BC_Score).");
+                    logBuilder.AppendLine($"Combined Update: se actualizaron {rowsUpdated} registros en INT1_MDC_TR.");
                 }
             }
         }

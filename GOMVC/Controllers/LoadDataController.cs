@@ -59,6 +59,7 @@ public class LoadDataController : Controller
             "D9_Gestores_Area",
             "I2_Campaña_Quebrantos",
             "INT_MDC",
+            "INT2_MDC",
             "R1_Quebrantos_Calculado_Most_Recent",
             "R1_Quebrantos_Calculado_Specific_Date",
             "R3_LayoutMc"
@@ -172,11 +173,18 @@ public class LoadDataController : Controller
                     result = await campañasController.Process();
                     break;
 
-                case "int_mdc":
+                case "int1_mdc":
                     var intmdccontroller = new INT_MDC_CONTROLLER(
                         HttpContext.RequestServices.GetRequiredService<ILogger<INT_MDC_CONTROLLER>>(),
                         _configuration);
                     result = await intmdccontroller.ProcessAll();
+                    break;
+
+                case "int2_mdc":
+                    var intmdc2controller = new INT_MDC_CONTROLLER(
+                        HttpContext.RequestServices.GetRequiredService<ILogger<INT_MDC_CONTROLLER>>(),
+                        _configuration);
+                    result = await intmdc2controller.ProcessSC();
                     break;
 
                 case "r1_quebrantos_calculado_most_recent":

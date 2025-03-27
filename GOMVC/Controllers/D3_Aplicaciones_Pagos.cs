@@ -57,7 +57,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             var errorLog = "No files found matching the pattern.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
-            await D3_WriteLog(logBuilder.ToString(), logPath);
+            await D3_WriteLogAsync(logBuilder.ToString(), logPath);
             return NotFound(errorLog);
         }
 
@@ -70,19 +70,19 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
 
             try
             {
-                // Conversión a UTF-8 con BOM
-                convertedFilePath = D3_ConvertToUTF8WithBOM(file);
+                // Conversión a UTF-8 con BOM (usando I/O asíncrono)
+                convertedFilePath = await D3_ConvertToUTF8WithBOMAsync(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
                 // Preprocesamiento: stopper y sanitización
-                sanitizedFilePath = D3_PreprocessCsvFile(convertedFilePath, logBuilder);
+                sanitizedFilePath = await D3_PreprocessCsvFileAsync(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
-                // Carga de datos a la tabla de staging
-                await D3_LoadDataToStage(sanitizedFilePath, logBuilder);
+                // Carga de datos a la tabla de staging (con CommandTimeout ajustado)
+                await D3_LoadDataToStageAsync(sanitizedFilePath, logBuilder);
 
-                // Inserción de datos validados a la tabla final
-                await D3_InsertValidatedData(logBuilder);
+                // Inserción de datos validados a la tabla final (con CommandTimeout alto)
+                await D3_InsertValidatedDataAsync(logBuilder);
 
                 // Movimiento de archivos en caso de éxito
                 D3_MoveFile(file, _archiveFolder);
@@ -105,15 +105,14 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                 if (sanitizedFilePath != null && System.IO.File.Exists(sanitizedFilePath))
                     D3_MoveFile(sanitizedFilePath, _errorFolder);
 
-                await D3_WriteLog(logBuilder.ToString(), logPath);
-                // Lanzar la excepción para indicar fallo en el proceso
+                await D3_WriteLogAsync(logBuilder.ToString(), logPath);
                 throw;
             }
         }
 
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D3 process completed.");
         _logger.LogInformation("D3 process completed.");
-        await D3_WriteLog(logBuilder.ToString(), logPath);
+        await D3_WriteLogAsync(logBuilder.ToString(), logPath);
 
         // Mover el log final a la carpeta de logs históricos
         D3_MoveLogToHistoric(logPath, _historicLogsFolder);
@@ -121,7 +120,8 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         return Ok("D3 process completed successfully.");
     }
 
-    private string D3_ConvertToUTF8WithBOM(string filePath)
+    // Conversión asíncrona a UTF-8 con BOM
+    private async Task<string> D3_ConvertToUTF8WithBOMAsync(string filePath)
     {
         var newFilePath = Path.Combine(
             Path.GetDirectoryName(filePath)!,
@@ -133,14 +133,15 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         {
             while (!reader.EndOfStream)
             {
-                writer.WriteLine(reader.ReadLine());
+                var line = await reader.ReadLineAsync();
+                await writer.WriteLineAsync(line);
             }
         }
-
         return newFilePath;
     }
 
-    private string D3_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
+    // Sanitización asíncrona del archivo CSV
+    private async Task<string> D3_PreprocessCsvFileAsync(string inputFilePath, StringBuilder logBuilder)
     {
         var sanitizedFilePath = Path.Combine(
             Path.GetDirectoryName(inputFilePath)!,
@@ -154,29 +155,23 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 string? line;
                 bool headerProcessed = false;
-
-                while ((line = reader.ReadLine()) != null)
+                while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    // Escribir la cabecera sin validación
                     if (!headerProcessed)
                     {
-                        writer.WriteLine(line);
+                        await writer.WriteLineAsync(line);
                         headerProcessed = true;
                         continue;
                     }
-
-                    // Verificar stopper: si la primera columna es "0", detener el procesamiento
                     var columns = line.Split(',');
                     if (columns[0].Trim() == "0")
                     {
                         logBuilder.AppendLine("Stopper '0' found in the first column. Stopping further processing.");
                         break;
                     }
-
-                    writer.WriteLine(line);
+                    await writer.WriteLineAsync(line);
                 }
             }
-
             logBuilder.AppendLine($"File successfully sanitized: {sanitizedFilePath}");
         }
         catch (Exception ex)
@@ -184,11 +179,11 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             logBuilder.AppendLine($"Error during preprocessing: {ex.Message}");
             throw;
         }
-
         return sanitizedFilePath;
     }
 
-    private async Task D3_LoadDataToStage(string csvFilePath, StringBuilder logBuilder)
+    // Carga asíncrona de datos a la tabla de staging
+    private async Task D3_LoadDataToStageAsync(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -197,12 +192,13 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 try
                 {
-                    // Truncar la tabla de staging
-                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D3_Stage_Aplicacion_Pagos;", connection, transaction);
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D3_Stage_Aplicacion_Pagos;", connection, transaction)
+                    {
+                        CommandTimeout = 600
+                    };
                     await truncateCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Truncated table D3_Stage_Aplicacion_Pagos.");
 
-                    // Cargar datos a la tabla de staging
                     var loadCommandText = "LOAD DATA LOCAL INFILE '" +
                         csvFilePath.Replace("\\", "\\\\") +
                         "' INTO TABLE D3_Stage_Aplicacion_Pagos " +
@@ -210,7 +206,10 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                         "ENCLOSED BY '\"' " +
                         "LINES TERMINATED BY '\\n' " +
                         "IGNORE 1 LINES;";
-                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction)
+                    {
+                        CommandTimeout = 3600 // Timeout alto para cargas masivas
+                    };
                     await loadCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Loaded data into D3_Stage_Aplicacion_Pagos.");
 
@@ -227,7 +226,8 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         }
     }
 
-    private async Task D3_InsertValidatedData(StringBuilder logBuilder)
+    // Inserción asíncrona de datos validados a la tabla final
+    private async Task D3_InsertValidatedDataAsync(StringBuilder logBuilder)
     {
         var sqlInsertCommand = @"
             INSERT INTO D3_Aplicacion_Pagos (
@@ -259,14 +259,32 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 try
                 {
-                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
+                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction)
+                    {
+                        CommandTimeout = 3600 // Timeout alto para la operación de inserción masiva
+                    };
                     await command.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Inserted validated data into D3_Aplicacion_Pagos.");
                     await transaction.CommitAsync();
                 }
                 catch (Exception ex)
                 {
-                    await transaction.RollbackAsync();
+                    _logger.LogError(ex, "Exception in D3_InsertValidatedDataAsync. Connection state: {State}", connection.State);
+                    logBuilder.AppendLine($"[DEBUG] Exception in D3_InsertValidatedDataAsync. Connection state: {connection.State}");
+                    logBuilder.AppendLine($"[DEBUG] Exception details: {ex}");
+
+                    try
+                    {
+                        if (connection.State == System.Data.ConnectionState.Open)
+                        {
+                            await transaction.RollbackAsync();
+                        }
+                    }
+                    catch (Exception rbEx)
+                    {
+                        _logger.LogError(rbEx, "Rollback failed in D3_InsertValidatedDataAsync.");
+                        logBuilder.AppendLine($"[DEBUG] Rollback exception: {rbEx}");
+                    }
                     logBuilder.AppendLine($"Error inserting data: {ex.Message}");
                     _logger.LogError(ex, "Error inserting data.");
                     throw;
@@ -275,6 +293,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         }
     }
 
+    // Movimiento de archivos
     private void D3_MoveFile(string sourceFilePath, string destinationFolder)
     {
         try
@@ -283,13 +302,11 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 Directory.CreateDirectory(destinationFolder);
             }
-
             var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
             if (System.IO.File.Exists(destinationFilePath))
             {
                 System.IO.File.Delete(destinationFilePath);
             }
-
             System.IO.File.Move(sourceFilePath, destinationFilePath);
             _logger.LogInformation($"File moved: {sourceFilePath} -> {destinationFilePath}");
         }
@@ -300,7 +317,8 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         }
     }
 
-    private async Task D3_WriteLog(string content, string logPath)
+    // Escritura asíncrona de log
+    private async Task D3_WriteLogAsync(string content, string logPath)
     {
         try
         {
@@ -309,7 +327,6 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
             {
                 Directory.CreateDirectory(directory!);
             }
-
             await System.IO.File.WriteAllTextAsync(logPath, content);
             _logger.LogInformation($"Log written to {logPath}");
         }
@@ -320,6 +337,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         }
     }
 
+    // Movimiento del log a la carpeta histórica
     private void D3_MoveLogToHistoric(string logPath, string historicLogsFolder)
     {
         try
@@ -329,16 +347,13 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
                 _logger.LogWarning($"Log file does not exist: {logPath}");
                 return;
             }
-
             if (!Directory.Exists(historicLogsFolder))
             {
                 Directory.CreateDirectory(historicLogsFolder);
             }
-
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
             var destinationFilePath = Path.Combine(historicLogsFolder, logFileName);
-
             System.IO.File.Move(logPath, destinationFilePath);
             _logger.LogInformation($"Log file moved to historic logs: {destinationFilePath}");
         }
@@ -349,6 +364,7 @@ public class D3_Aplicaciones_Pagos_Controller : Controller
         }
     }
 
+    // Movimiento de un log existente al iniciar el proceso
     private void MoveExistingLog(string logPath, string historicLogsFolder)
     {
         try
