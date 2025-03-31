@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "4giJIL05ubc=",
+  "dgSpecHash": "XP3APa4XIP8=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
+  "projectFilePath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Go Credit\\.nuget\\packages\\azure.core\\1.35.0\\azure.core.1.35.0.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\azure.identity\\1.10.3\\azure.identity.1.10.3.nupkg.sha512",
@@ -82,6 +82,7 @@
     "C:\\Users\\Go Credit\\.nuget\\packages\\nlog\\5.3.4\\nlog.5.3.4.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\pomelo.entityframeworkcore.mysql\\8.0.2\\pomelo.entityframeworkcore.mysql.8.0.2.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\rbush\\4.0.0\\rbush.4.0.0.nupkg.sha512",
+    "C:\\Users\\Go Credit\\.nuget\\packages\\scrutor\\6.0.1\\scrutor.6.0.1.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\serilog\\4.0.0\\serilog.4.0.0.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\serilog.aspnetcore\\8.0.3\\serilog.aspnetcore.8.0.3.nupkg.sha512",
     "C:\\Users\\Go Credit\\.nuget\\packages\\serilog.extensions.hosting\\8.0.0\\serilog.extensions.hosting.8.0.0.nupkg.sha512",

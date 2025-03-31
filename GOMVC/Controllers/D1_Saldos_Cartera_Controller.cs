@@ -13,6 +13,7 @@ public class D1_Saldos_Cartera_Controller : Controller
     private readonly ILogger<D1_Saldos_Cartera_Controller> _logger;
     private readonly IConfiguration _configuration;
     private readonly string _connectionString;
+
     // Directorios base para archivos y logs
     private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
     private readonly string _historicFilesFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
@@ -26,7 +27,10 @@ public class D1_Saldos_Cartera_Controller : Controller
 
     // Nombre dinámico del log basado en el controlador
     private readonly string _logFileName;
-    
+
+    // Timeout para comandos MySQL (en segundos). Ajusta según necesidad.
+    private const int MySqlCommandTimeout = 3600;
+
     public D1_Saldos_Cartera_Controller(ILogger<D1_Saldos_Cartera_Controller> logger, IConfiguration configuration)
     {
         _logger = logger;
@@ -34,8 +38,11 @@ public class D1_Saldos_Cartera_Controller : Controller
         _connectionString = _configuration.GetConnectionString("DefaultConnection")!;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _logFileName = $"{nameof(D1_Saldos_Cartera_Controller)}.log";
+        MoveExistingLogIfNeeded();
+    }
 
-        // Si existe un log con el mismo nombre, lo movemos a la carpeta histórica de logs
+    private void MoveExistingLogIfNeeded()
+    {
         var logPath = Path.Combine(_logsFolder, _logFileName);
         if (System.IO.File.Exists(logPath))
         {
@@ -54,10 +61,10 @@ public class D1_Saldos_Cartera_Controller : Controller
         var files = Directory.GetFiles(_filePath, "SaldosCarteraXConvenio*.csv");
         if (files.Length == 0)
         {
-            var errorLog = "No files matching 'SaldosCarteraXConvenio*.csv' found.";
+            string errorLog = "No files matching 'SaldosCarteraXConvenio*.csv' found.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
-            await D1_WriteLog(logBuilder.ToString(), logPath);
+            await WriteLogAsync(logBuilder.ToString(), logPath);
             return NotFound(errorLog);
         }
 
@@ -69,21 +76,21 @@ public class D1_Saldos_Cartera_Controller : Controller
 
             try
             {
-                convertedFilePath = D1_ConvertToUTF8WithBOM(file);
+                convertedFilePath = ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                sanitizedFilePath = D1_PreprocessCsvFile(convertedFilePath, logBuilder);
+                sanitizedFilePath = PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
-                await D1_BulkInsertToStage(sanitizedFilePath, logBuilder);
-                await D1_InsertToFinalTable(logBuilder);
+                await BulkInsertToStageAsync(sanitizedFilePath, logBuilder);
+                await InsertToFinalTableAsync(logBuilder);
 
                 // Movimiento de archivos en caso de éxito
-                D1_MoveFile(file, _archiveFolder, logBuilder);
+                MoveFile(file, _archiveFolder, logBuilder);
                 if (convertedFilePath != null)
-                    D1_MoveFile(convertedFilePath, _processedFolder, logBuilder);
+                    MoveFile(convertedFilePath, _processedFolder, logBuilder);
                 if (sanitizedFilePath != null)
-                    D1_MoveFile(sanitizedFilePath, _processedFolder, logBuilder);
+                    MoveFile(sanitizedFilePath, _processedFolder, logBuilder);
             }
             catch (Exception ex)
             {
@@ -91,24 +98,23 @@ public class D1_Saldos_Cartera_Controller : Controller
                 _logger.LogError(ex, $"Error processing file {file}");
 
                 // Movimiento de todos los archivos relacionados a la carpeta de error
-                D1_MoveFile(file, _errorFilesFolder, logBuilder);
+                MoveFile(file, _errorFilesFolder, logBuilder);
                 if (convertedFilePath != null && System.IO.File.Exists(convertedFilePath))
-                    D1_MoveFile(convertedFilePath, _errorFilesFolder, logBuilder);
+                    MoveFile(convertedFilePath, _errorFilesFolder, logBuilder);
                 if (sanitizedFilePath != null && System.IO.File.Exists(sanitizedFilePath))
-                    D1_MoveFile(sanitizedFilePath, _errorFilesFolder, logBuilder);
+                    MoveFile(sanitizedFilePath, _errorFilesFolder, logBuilder);
 
-                await D1_WriteLog(logBuilder.ToString(), logPath);
-                // Relanzar la excepción para detener el proceso
-                throw;
+                await WriteLogAsync(logBuilder.ToString(), logPath);
+                throw; // Relanza la excepción para detener el proceso
             }
         }
 
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Process completed.");
         _logger.LogInformation("Process completed.");
-        await D1_WriteLog(logBuilder.ToString(), logPath);
+        await WriteLogAsync(logBuilder.ToString(), logPath);
 
         // Movimiento del log finalizado a la carpeta histórica de logs
-        D1_MoveLogToHistoric(logPath, _historicLogsFolder);
+        MoveLogToHistoric(logPath, _historicLogsFolder);
 
         return Ok("Files processed successfully.");
     }
@@ -124,10 +130,10 @@ public class D1_Saldos_Cartera_Controller : Controller
         var files = Directory.GetFiles(_filePath, "SaldosCarteraXConvenio_*.csv");
         if (files.Length == 0)
         {
-            var errorLog = "No historic files matching 'SaldosCarteraXConvenio_*.csv' found.";
+            string errorLog = "No historic files matching 'SaldosCarteraXConvenio_*.csv' found.";
             logBuilder.AppendLine(errorLog);
             _logger.LogError(errorLog);
-            await D1_WriteLog(logBuilder.ToString(), logPath);
+            await WriteLogAsync(logBuilder.ToString(), logPath);
             return NotFound(errorLog);
         }
 
@@ -144,10 +150,10 @@ public class D1_Saldos_Cartera_Controller : Controller
 
                 if (!match.Success)
                 {
-                    var errorLog = $"Invalid file name format: {fileName}";
+                    string errorLog = $"Invalid file name format: {fileName}";
                     logBuilder.AppendLine(errorLog);
                     _logger.LogError(errorLog);
-                    D1_MoveFile(file, _errorFilesFolder, logBuilder);
+                    MoveFile(file, _errorFilesFolder, logBuilder);
                     continue;
                 }
 
@@ -156,7 +162,6 @@ public class D1_Saldos_Cartera_Controller : Controller
                 var month = int.Parse(match.Groups[2].Value);
                 var year = int.Parse(match.Groups[3].Value);
                 var period = match.Groups[4].Value;
-
                 var parsedDate = new DateTime(year, month, day);
                 var timeOffset = period switch
                 {
@@ -167,53 +172,49 @@ public class D1_Saldos_Cartera_Controller : Controller
                 };
 
                 var fechaGenerado = parsedDate.Add(timeOffset);
-
                 logBuilder.AppendLine($"Parsed FechaGenerado: {fechaGenerado} for file: {file}");
 
-                convertedFilePath = D1_ConvertToUTF8WithBOM(file);
+                convertedFilePath = ConvertToUTF8WithBOM(file);
                 logBuilder.AppendLine($"Converted file to UTF-8 with BOM: {convertedFilePath}");
 
-                sanitizedFilePath = D1_PreprocessCsvFile(convertedFilePath, logBuilder);
+                sanitizedFilePath = PreprocessCsvFile(convertedFilePath, logBuilder);
                 logBuilder.AppendLine($"Sanitized file: {sanitizedFilePath}");
 
-                await D1_BulkInsertToStage(sanitizedFilePath, logBuilder);
-                await D1_InsertHistoricData(fechaGenerado, logBuilder);
+                await BulkInsertToStageAsync(sanitizedFilePath, logBuilder);
+                await InsertHistoricDataAsync(fechaGenerado, logBuilder);
 
                 // Movimiento de archivos en caso de éxito
-                D1_MoveFile(file, _archiveFolder, logBuilder);
+                MoveFile(file, _archiveFolder, logBuilder);
                 if (convertedFilePath != null)
-                    D1_MoveFile(convertedFilePath, _processedFolder, logBuilder);
+                    MoveFile(convertedFilePath, _processedFolder, logBuilder);
                 if (sanitizedFilePath != null)
-                    D1_MoveFile(sanitizedFilePath, _processedFolder, logBuilder);
+                    MoveFile(sanitizedFilePath, _processedFolder, logBuilder);
             }
             catch (Exception ex)
             {
                 logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
                 _logger.LogError(ex, $"Error processing file {file}");
 
-                // Movimiento de todos los archivos relacionados a la carpeta de error
-                D1_MoveFile(file, _errorFilesFolder, logBuilder);
+                MoveFile(file, _errorFilesFolder, logBuilder);
                 if (convertedFilePath != null && System.IO.File.Exists(convertedFilePath))
-                    D1_MoveFile(convertedFilePath, _errorFilesFolder, logBuilder);
+                    MoveFile(convertedFilePath, _errorFilesFolder, logBuilder);
                 if (sanitizedFilePath != null && System.IO.File.Exists(sanitizedFilePath))
-                    D1_MoveFile(sanitizedFilePath, _errorFilesFolder, logBuilder);
+                    MoveFile(sanitizedFilePath, _errorFilesFolder, logBuilder);
 
-                await D1_WriteLog(logBuilder.ToString(), logPath);
+                await WriteLogAsync(logBuilder.ToString(), logPath);
                 throw;
             }
         }
 
         logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Historic process completed.");
         _logger.LogInformation("Historic process completed.");
-        await D1_WriteLog(logBuilder.ToString(), logPath);
+        await WriteLogAsync(logBuilder.ToString(), logPath);
 
-        // Movimiento del log finalizado a la carpeta histórica de logs
-        D1_MoveLogToHistoric(logPath, _historicLogsFolder);
-
+        MoveLogToHistoric(logPath, _historicLogsFolder);
         return Ok("Historic files processed successfully.");
     }
 
-    private async Task D1_BulkInsertToStage(string csvFilePath, StringBuilder logBuilder)
+    private async Task BulkInsertToStageAsync(string csvFilePath, StringBuilder logBuilder)
     {
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -222,7 +223,10 @@ public class D1_Saldos_Cartera_Controller : Controller
             {
                 try
                 {
-                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D1_Stage_Saldos_Cartera;", connection, transaction);
+                    var truncateCommand = new MySqlCommand("TRUNCATE TABLE D1_Stage_Saldos_Cartera;", connection, transaction)
+                    {
+                        CommandTimeout = MySqlCommandTimeout
+                    };
                     await truncateCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Truncated table D1_Stage_Saldos_Cartera.");
 
@@ -232,7 +236,10 @@ public class D1_Saldos_Cartera_Controller : Controller
                                           "ENCLOSED BY '\"' " +
                                           "LINES TERMINATED BY '\\n' " +
                                           "IGNORE 1 LINES;";
-                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction);
+                    var loadCommand = new MySqlCommand(loadCommandText, connection, transaction)
+                    {
+                        CommandTimeout = MySqlCommandTimeout
+                    };
                     await loadCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine("Bulk inserted data into D1_Stage_Saldos_Cartera.");
 
@@ -249,7 +256,7 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
-    private async Task D1_InsertToFinalTable(StringBuilder logBuilder)
+    private async Task InsertToFinalTableAsync(StringBuilder logBuilder)
     {
         var sqlInsertCommand = @"
             INSERT INTO D1_Saldos_Cartera (
@@ -293,7 +300,8 @@ public class D1_Saldos_Cartera_Controller : Controller
                 nRetencion, nJoPay, iMaxDays, STR_TO_DATE(NULLIF(NULLIF(vMaxDate, ''), '0.00'), '%d/%m/%Y') AS vMaxDate, 
                 nLiquidate, nLiqPrin, nLiqInt, nLiqMor, nLiqCha, nLiqPrinTran, nLiqIntTran, nLiqMorTran, 
                 nLiqChaTran, nLiqRetTran, vScoreBuro, vCollectStatus, nCAT, vOpTable, NOW() AS FechaGenerado
-            FROM D1_Stage_Saldos_Cartera;";
+            FROM D1_Stage_Saldos_Cartera;
+        ";
 
         using (var connection = new MySqlConnection(_connectionString))
         {
@@ -302,8 +310,11 @@ public class D1_Saldos_Cartera_Controller : Controller
             {
                 try
                 {
-                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction);
-                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    var command = new MySqlCommand(sqlInsertCommand, connection, transaction)
+                    {
+                        CommandTimeout = MySqlCommandTimeout
+                    };
+                    int rowsAffected = await command.ExecuteNonQueryAsync();
                     logBuilder.AppendLine($"Inserted {rowsAffected} rows into D1_Saldos_Cartera.");
                     await transaction.CommitAsync();
                 }
@@ -318,12 +329,9 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
-    private async Task D1_InsertHistoricData(DateTime fechaGenerado, StringBuilder logBuilder)
+    private async Task InsertHistoricDataAsync(DateTime fechaGenerado, StringBuilder logBuilder)
     {
-        // Lista de columnas de fecha en la tabla stage que se insertarán en la tabla final:
-        // Primer_Pago_Teorico, Ultimo_Pago, Fecha_Desembolso, Primer_Pago_Real, 
-        // Ultimo_Pago_c_ListaCobro, Ultimo_Pago_Aplicado, Sig_Pago, vMaxDate
-
+        // Primero se “purgan” las columnas de fecha vacías
         var sqlPurgeCommand = @"
             UPDATE D1_Stage_Saldos_Cartera
             SET 
@@ -335,8 +343,7 @@ public class D1_Saldos_Cartera_Controller : Controller
                 Ultimo_Pago_Aplicado = NULLIF(Ultimo_Pago_Aplicado, ''),
                 Sig_Pago = NULLIF(Sig_Pago, ''),
                 vMaxDate = NULLIF(vMaxDate, '')
-        ;
-        ";
+        ;";
 
         var sqlInsertCommand = @"
             INSERT INTO D1_Saldos_Cartera (
@@ -392,13 +399,17 @@ public class D1_Saldos_Cartera_Controller : Controller
             {
                 try
                 {
-                    // Primero purgar los campos de fecha vacíos en la tabla stage.
-                    var purgeCommand = new MySqlCommand(sqlPurgeCommand, connection, transaction);
+                    var purgeCommand = new MySqlCommand(sqlPurgeCommand, connection, transaction)
+                    {
+                        CommandTimeout = MySqlCommandTimeout
+                    };
                     int purgeRows = await purgeCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine($"Purge stage table: {purgeRows} rows updated.");
 
-                    // Luego, realizar el INSERT desde la tabla stage a la tabla final.
-                    var insertCommand = new MySqlCommand(sqlInsertCommand, connection, transaction);
+                    var insertCommand = new MySqlCommand(sqlInsertCommand, connection, transaction)
+                    {
+                        CommandTimeout = MySqlCommandTimeout
+                    };
                     insertCommand.Parameters.AddWithValue("@FechaGenerado", fechaGenerado);
                     int rowsAffected = await insertCommand.ExecuteNonQueryAsync();
                     logBuilder.AppendLine($"Inserted {rowsAffected} rows into D1_Saldos_Cartera.");
@@ -415,7 +426,7 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
-    private string D1_ConvertToUTF8WithBOM(string filePath)
+    private string ConvertToUTF8WithBOM(string filePath)
     {
         var newFilePath = Path.Combine(
             Path.GetDirectoryName(filePath)!,
@@ -434,7 +445,7 @@ public class D1_Saldos_Cartera_Controller : Controller
         return newFilePath;
     }
 
-    private string D1_PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
+    private string PreprocessCsvFile(string inputFilePath, StringBuilder logBuilder)
     {
         var sanitizedFilePath = Path.Combine(
             Path.GetDirectoryName(inputFilePath)!,
@@ -448,27 +459,23 @@ public class D1_Saldos_Cartera_Controller : Controller
             {
                 string? line;
                 bool headerProcessed = false;
-
                 while ((line = reader.ReadLine()) != null)
                 {
                     if (!headerProcessed)
                     {
-                        writer.WriteLine(line); // Escribir el encabezado tal como está
+                        writer.WriteLine(line);
                         headerProcessed = true;
                         continue;
                     }
-
                     var columns = line.Split(',');
-                    if (columns[0].Trim() == "0" || string.IsNullOrWhiteSpace(columns[0]))
+                    if (columns.Length == 0 || string.IsNullOrWhiteSpace(columns[0]) || columns[0].Trim() == "0")
                     {
                         logBuilder.AppendLine($"Skipped invalid or empty row: {line}");
                         continue;
                     }
-
                     writer.WriteLine(line);
                 }
             }
-
             logBuilder.AppendLine($"File sanitized successfully: {sanitizedFilePath}");
         }
         catch (Exception ex)
@@ -476,24 +483,19 @@ public class D1_Saldos_Cartera_Controller : Controller
             logBuilder.AppendLine($"Error during file sanitization: {ex.Message}");
             throw;
         }
-
         return sanitizedFilePath;
     }
 
-    private void D1_MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder)
+    private void MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder)
     {
         try
         {
             if (!Directory.Exists(destinationFolder))
-            {
                 Directory.CreateDirectory(destinationFolder);
-            }
 
             var destinationFilePath = Path.Combine(destinationFolder, Path.GetFileName(sourceFilePath));
             if (System.IO.File.Exists(destinationFilePath))
-            {
                 System.IO.File.Delete(destinationFilePath);
-            }
 
             System.IO.File.Move(sourceFilePath, destinationFilePath);
             logBuilder.AppendLine($"Moved file: {sourceFilePath} -> {destinationFilePath}");
@@ -506,7 +508,7 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
-    private async Task D1_WriteLog(string content, string logPath)
+    private async Task WriteLogAsync(string content, string logPath)
     {
         try
         {
@@ -519,14 +521,12 @@ public class D1_Saldos_Cartera_Controller : Controller
         }
     }
 
-    private void D1_MoveLogToHistoric(string logPath, string historicLogsFolder)
+    private void MoveLogToHistoric(string logPath, string historicLogsFolder)
     {
         try
         {
             if (!Directory.Exists(historicLogsFolder))
-            {
                 Directory.CreateDirectory(historicLogsFolder);
-            }
 
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var logFileName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
@@ -546,9 +546,8 @@ public class D1_Saldos_Cartera_Controller : Controller
         try
         {
             if (!Directory.Exists(historicLogsFolder))
-            {
                 Directory.CreateDirectory(historicLogsFolder);
-            }
+
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var destinationFilePath = Path.Combine(historicLogsFolder,
                 Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath));

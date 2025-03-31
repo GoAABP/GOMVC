@@ -97,12 +97,12 @@ public class LoadDataController : Controller
                     result = await saldosCarteraController.D1_ProcessSaldosCartera();
                     break;
 
-                case "d1b_saldos_cartera":
-                    var saldosCarteraControllerb = new D1_Saldos_Cartera_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D1_Saldos_Cartera_Controller>>(),
-                        _configuration);
-                    result = await saldosCarteraControllerb.D1_ProcessHistoricSaldosCartera();
-                    break;    
+                //case "d1b_saldos_cartera":
+                //    var saldosCarteraControllerb = new D1_Saldos_Cartera_Controller(
+                //        HttpContext.RequestServices.GetRequiredService<ILogger<D1_Saldos_Cartera_Controller>>(),
+                //        _configuration);
+                //    result = await saldosCarteraControllerb.D1_ProcessHistoricSaldosCartera();
+                //    break;    
 
                 case "d2_saldos_contables":
                     var saldosContablesController = new D2_Saldos_Contables_Controller(

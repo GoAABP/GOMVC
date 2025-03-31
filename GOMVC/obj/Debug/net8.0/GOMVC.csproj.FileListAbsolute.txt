@@ -67,6 +67,7 @@ C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\MySqlConnector.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\NLog.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Pomelo.EntityFrameworkCore.MySql.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\RBush.dll
+C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Scrutor.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.AspNetCore.dll
 C:\Users\Go Credit\Documents\GOMVC\gomvc\bin\Debug\net8.0\Serilog.Extensions.Hosting.dll

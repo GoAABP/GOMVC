@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj": {}
+    "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj": {
+    "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
+        "projectUniqueName": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj",
         "projectName": "GOMVC",
-        "projectPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\GOMVC.csproj",
+        "projectPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\GOMVC.csproj",
         "packagesPath": "C:\\Users\\Go Credit\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\gomvc\\obj\\",
+        "outputPath": "C:\\Users\\Go Credit\\Documents\\GOMVC\\GOMVC\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Go Credit\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -94,6 +94,10 @@
             "Pomelo.EntityFrameworkCore.MySql": {
               "target": "Package",
               "version": "[8.0.2, )"
+            },
+            "Scrutor": {
+              "target": "Package",
+              "version": "[6.0.1, )"
             },
             "Serilog.AspNetCore": {
               "target": "Package",
