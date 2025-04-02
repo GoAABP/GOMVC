@@ -52,7 +52,8 @@ namespace GOMVC.Controllers
         /// 2. Procesa el XLSX en chunks, eliminando saltos de línea y delimitadores no deseados, y convirtiendo correctamente las fechas.
         /// 3. Genera un CSV delimitado por '|' (UTF-8 con BOM).
         /// 4. Carga el CSV en la tabla de staging (D5_Stage_Gestiones).
-        /// 5. Inserta en la tabla final (D5_Gestiones) solo los registros nuevos mediante LEFT JOIN con pseudo-concat.
+        /// 5. Normaliza la información en la tabla de staging.
+        /// 6. Inserta en la tabla final (D5_Gestiones) solo los registros nuevos mediante LEFT JOIN con pseudo-concat.
         /// </summary>
         [HttpPost("D5_ProcessGestiones")]
         public async Task<IActionResult> D5_ProcessGestiones()
@@ -91,7 +92,10 @@ namespace GOMVC.Controllers
                     // 4. Cargar el CSV a la tabla de staging.
                     await BulkInsertToStageAsync(csvFilePath, logBuilder);
 
-                    // 5. Insertar solo registros nuevos a la tabla final.
+                    // 5. Normalizar datos en la tabla de staging.
+                    await NormalizeStageDataAsync(logBuilder);
+
+                    // 6. Insertar solo registros nuevos a la tabla final.
                     await InsertToFinalTableAsync(logBuilder);
 
                     // Mover archivos a carpeta Archive.
@@ -202,14 +206,12 @@ namespace GOMVC.Controllers
         {
             if (string.IsNullOrWhiteSpace(input))
                 return "";
-
             string[] formats = new string[]
             {
                 "dd/MM/yyyy HH:mm:ss", "dd/MM/yyyy HH:mm", "dd/MM/yyyy", "d/M/yyyy",
                 "MM/dd/yyyy HH:mm:ss", "MM/dd/yyyy", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd",
                 "dd-MM-yyyy", "dd.MM.yyyy"
             };
-
             if (DateTime.TryParseExact(input, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dt) ||
                 DateTime.TryParse(input, out dt))
             {
@@ -292,9 +294,57 @@ namespace GOMVC.Controllers
         }
 
         /// <summary>
+        /// Normaliza los datos en la tabla de staging, aplicando:
+        /// - Conversión de cadenas en blanco a NULL.
+        /// - Eliminación de breaklines y espacios extra.
+        /// - Formateo de campos de fecha.
+        /// </summary>
+        private async Task NormalizeStageDataAsync(StringBuilder logBuilder)
+        {
+            string sqlUpdate = @"
+                UPDATE D5_Stage_Gestiones
+                SET
+                    Agencia_Registro = NULLIF(TRIM(REPLACE(REPLACE(Agencia_Registro, '\r', ' '), '\n', ' ')), ''),
+                    Causa_No_Pago = NULLIF(TRIM(REPLACE(REPLACE(Causa_No_Pago, '\r', ' '), '\n', ' ')), ''),
+                    Causa_No_Domiciliacion = NULLIF(TRIM(REPLACE(REPLACE(Causa_No_Domiciliacion, '\r', ' '), '\n', ' ')), ''),
+                    Codigo_Accion = NULLIF(TRIM(REPLACE(REPLACE(Codigo_Accion, '\r', ' '), '\n', ' ')), ''),
+                    Codigo_Resultado = NULLIF(TRIM(REPLACE(REPLACE(Codigo_Resultado, '\r', ' '), '\n', ' ')), ''),
+                    Comentarios = NULLIF(TRIM(REPLACE(REPLACE(Comentarios, '\r', ' '), '\n', ' ')), ''),
+                    Contacto_Generado = NULLIF(TRIM(REPLACE(REPLACE(Contacto_Generado, '\r', ' '), '\n', ' ')), ''),
+                    Coordenadas = NULLIF(TRIM(REPLACE(REPLACE(Coordenadas, '\r', ' '), '\n', ' ')), ''),
+                    Credito = NULLIF(TRIM(REPLACE(REPLACE(Credito, '\r', ' '), '\n', ' ')), ''),
+                    Estatus_Promesa = NULLIF(TRIM(REPLACE(REPLACE(Estatus_Promesa, '\r', ' '), '\n', ' ')), ''),
+                    Monto_Promesa = NULLIF(TRIM(REPLACE(REPLACE(Monto_Promesa, '\r', ' '), '\n', ' ')), ''),
+                    Origen = NULLIF(TRIM(REPLACE(REPLACE(Origen, '\r', ' '), '\n', ' ')), ''),
+                    Producto = NULLIF(TRIM(REPLACE(REPLACE(Producto, '\r', ' '), '\n', ' ')), ''),
+                    Resultado = NULLIF(TRIM(REPLACE(REPLACE(Resultado, '\r', ' '), '\n', ' ')), ''),
+                    Telefono = NULLIF(TRIM(REPLACE(REPLACE(Telefono, '\r', ' '), '\n', ' ')), ''),
+                    Tipo_Pago = NULLIF(TRIM(REPLACE(REPLACE(Tipo_Pago, '\r', ' '), '\n', ' ')), ''),
+                    Usuario_Registro = NULLIF(TRIM(REPLACE(REPLACE(Usuario_Registro, '\r', ' '), '\n', ' ')), ''),
+                    Fecha_Actividad = CASE 
+                        WHEN TRIM(Fecha_Actividad) = '' THEN NULL
+                        ELSE DATE_FORMAT(STR_TO_DATE(Fecha_Actividad, '%Y-%m-%d %H:%i:%s'), '%Y-%m-%d')
+                     END,
+                    Fecha_Promesa = CASE 
+                        WHEN TRIM(Fecha_Promesa) = '' THEN NULL
+                        ELSE DATE_FORMAT(STR_TO_DATE(Fecha_Promesa, '%Y-%m-%d'), '%Y-%m-%d')
+                    END;";
+            using (var connection = new MySqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var cmd = new MySqlCommand(sqlUpdate, connection))
+                {
+                    cmd.CommandTimeout = 3600;
+                    int rowsAffected = await cmd.ExecuteNonQueryAsync();
+                    logBuilder.AppendLine($"Normalized {rowsAffected} rows in D5_Stage_Gestiones.");
+                }
+            }
+        }
+
+        /// <summary>
         /// Inserta solo los registros nuevos de D5_Stage_Gestiones en la tabla final D5_Gestiones.
         /// Se utiliza CONCAT_WS para generar una clave única en ambas tablas y LEFT JOIN para filtrar registros ya existentes.
-        /// Además, se convierte Fecha_Actividad y Fecha_Promesa con STR_TO_DATE.
+        /// Se formatean las fechas de la tabla final para igualar el formato de staging.
         /// </summary>
         private async Task InsertToFinalTableAsync(StringBuilder logBuilder)
         {
@@ -331,8 +381,8 @@ namespace GOMVC.Controllers
                     s.Coordenadas, 
                     s.Credito, 
                     s.Estatus_Promesa,
-                    DATE(STR_TO_DATE(NULLIF(s.Fecha_Actividad, ''), '%Y-%m-%d %H:%i:%s')) AS Fecha_Actividad,
-                    STR_TO_DATE(NULLIF(s.Fecha_Promesa, ''), '%Y-%m-%d') AS Fecha_Promesa,
+                    s.Fecha_Actividad,
+                    s.Fecha_Promesa,
                     s.Monto_Promesa, 
                     s.Origen, 
                     s.Producto, 
@@ -343,17 +393,47 @@ namespace GOMVC.Controllers
                 FROM D5_Stage_Gestiones s
                 LEFT JOIN D5_Gestiones f
                   ON CONCAT_WS('|',
-                        s.Agencia_Registro, s.Causa_No_Pago, s.Causa_No_Domiciliacion, s.Codigo_Accion, s.Codigo_Resultado,
-                        s.Comentarios, s.Contacto_Generado, s.Coordenadas, s.Credito, s.Estatus_Promesa,
-                        s.Fecha_Actividad, s.Fecha_Promesa, s.Monto_Promesa, s.Origen, s.Producto,
-                        s.Resultado, s.Telefono, s.Tipo_Pago, s.Usuario_Registro
+                        TRIM(COALESCE(s.Agencia_Registro, '')),
+                        TRIM(COALESCE(s.Causa_No_Pago, '')),
+                        TRIM(COALESCE(s.Causa_No_Domiciliacion, '')),
+                        TRIM(COALESCE(s.Codigo_Accion, '')),
+                        TRIM(COALESCE(s.Codigo_Resultado, '')),
+                        TRIM(COALESCE(s.Comentarios, '')),
+                        TRIM(COALESCE(s.Contacto_Generado, '')),
+                        TRIM(COALESCE(s.Coordenadas, '')),
+                        TRIM(COALESCE(s.Credito, '')),
+                        TRIM(COALESCE(s.Estatus_Promesa, '')),
+                        TRIM(COALESCE(s.Fecha_Actividad, '')),
+                        TRIM(COALESCE(s.Fecha_Promesa, '')),
+                        TRIM(COALESCE(s.Monto_Promesa, '')),
+                        TRIM(COALESCE(s.Origen, '')),
+                        TRIM(COALESCE(s.Producto, '')),
+                        TRIM(COALESCE(s.Resultado, '')),
+                        TRIM(COALESCE(s.Telefono, '')),
+                        TRIM(COALESCE(s.Tipo_Pago, '')),
+                        TRIM(COALESCE(s.Usuario_Registro, ''))
                      )
                      =
                      CONCAT_WS('|',
-                        f.Agencia_Registro, f.Causa_No_Pago, f.Causa_No_Domiciliacion, f.Codigo_Accion, f.Codigo_Resultado,
-                        f.Comentarios, f.Contacto_Generado, f.Coordenadas, f.Id_Credito, f.Estatus_Promesa,
-                        f.Fecha_Actividad, f.Fecha_Promesa, f.Monto_Promesa, f.Origen, f.Producto,
-                        f.Resultado, f.Telefono, f.Tipo_Pago, f.Usuario_Registro
+                        TRIM(COALESCE(f.Agencia_Registro, '')),
+                        TRIM(COALESCE(f.Causa_No_Pago, '')),
+                        TRIM(COALESCE(f.Causa_No_Domiciliacion, '')),
+                        TRIM(COALESCE(f.Codigo_Accion, '')),
+                        TRIM(COALESCE(f.Codigo_Resultado, '')),
+                        TRIM(COALESCE(f.Comentarios, '')),
+                        TRIM(COALESCE(f.Contacto_Generado, '')),
+                        TRIM(COALESCE(f.Coordenadas, '')),
+                        TRIM(COALESCE(f.Id_Credito, '')),
+                        TRIM(COALESCE(f.Estatus_Promesa, '')),
+                        TRIM(COALESCE(DATE_FORMAT(f.Fecha_Actividad, '%Y-%m-%d'), '')),
+                        TRIM(COALESCE(DATE_FORMAT(f.Fecha_Promesa, '%Y-%m-%d'), '')),
+                        TRIM(COALESCE(f.Monto_Promesa, '')),
+                        TRIM(COALESCE(f.Origen, '')),
+                        TRIM(COALESCE(f.Producto, '')),
+                        TRIM(COALESCE(f.Resultado, '')),
+                        TRIM(COALESCE(f.Telefono, '')),
+                        TRIM(COALESCE(f.Tipo_Pago, '')),
+                        TRIM(COALESCE(f.Usuario_Registro, ''))
                      )
                 WHERE f.Id_Credito IS NULL;";
 

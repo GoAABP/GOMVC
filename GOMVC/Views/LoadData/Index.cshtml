@@ -19,13 +19,53 @@
         </div>
         <button type="submit" class="btn btn-primary">Execute</button>
     </form>
-
-    <!-- Mensaje flotante de alerta -->
-    <div id="message" class="floating-message alert" role="alert"></div>
 </div>
+
+<!-- Contenedor de Notificaciones -->
+<div id="notifications" class="notification-container"></div>
 
 @section Scripts {
     <script>
+        function addNotification(message, isSuccess) {
+            const container = document.getElementById('notifications');
+            const notification = document.createElement('div');
+            notification.classList.add('notification');
+            notification.classList.add(isSuccess ? 'alert-success' : 'alert-danger');
+            
+            // Botón de cierre
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '&times;';
+            closeBtn.classList.add('close-btn');
+            closeBtn.onclick = function () {
+                removeNotification(notification);
+            };
+            notification.appendChild(closeBtn);
+            
+            // Mensaje
+            const text = document.createElement('div');
+            text.textContent = message;
+            notification.appendChild(text);
+            
+            // Agregar la notificación al inicio del contenedor
+            if (container.firstChild) {
+                container.insertBefore(notification, container.firstChild);
+            } else {
+                container.appendChild(notification);
+            }
+            
+            // Auto eliminación después de 10 segundos
+            //setTimeout(() => {
+            //    removeNotification(notification);
+            //}, 10000);
+        }
+        
+        function removeNotification(notification) {
+            notification.style.animation = 'fadeOut 0.5s forwards';
+            setTimeout(() => {
+                notification.remove();
+            }, 500);
+        }
+        
         document.getElementById('loadDataForm').addEventListener('submit', function (event) {
             event.preventDefault();
             
@@ -39,28 +79,17 @@
             .then(response => {
                 if (response.ok) {
                     return response.text().then(text => {
-                        showMessage('File processed successfully.', true);
+                        addNotification('Activity processed successfully.', true);
                     });
                 } else {
                     return response.text().then(text => {
-                        showMessage('Error processing file: ' + text, false);
+                        addNotification('Error processing activity: ' + text, false);
                     });
                 }
             })
             .catch(error => {
-                showMessage('Error processing file: ' + error.message, false);
+                addNotification('Error processing activity: ' + error.message, false);
             });
         });
-
-        function showMessage(message, isSuccess) {
-            var messageDiv = document.getElementById('message');
-            messageDiv.textContent = message;
-            messageDiv.className = 'floating-message alert ' + (isSuccess ? 'alert-success' : 'alert-danger');
-            messageDiv.style.display = 'block';
-            
-            setTimeout(function () {
-                messageDiv.style.display = 'none';
-            }, 60000); // 60 seconds
-        }
     </script>
 }

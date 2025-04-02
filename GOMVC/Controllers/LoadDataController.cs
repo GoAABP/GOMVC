@@ -1,218 +1,178 @@
 using Microsoft.AspNetCore.Mvc;
-using OfficeOpenXml;
-using MySql.Data.MySqlClient;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Net;
-using MimeKit;
-using MailKit.Security;
-using SharpCompress.Archives;
-using SharpCompress.Common;
-using System.Data;
-using Org.BouncyCastle.Asn1.Misc;
-using GOMVC.Controllers;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
-
-public class LoadDataController : Controller
+namespace GOMVC.Controllers
 {
- private readonly ILogger<LoadDataController> _logger;
-    private readonly IConfiguration _configuration;
-    private readonly string _connectionString;
-    private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
-    private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
-    private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
-
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-    public LoadDataController(ILogger<LoadDataController> logger, IConfiguration configuration)
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+    public class LoadDataController : Controller
     {
-        _logger = logger;
-        _configuration = configuration;
-#pragma warning disable CS8601 // Possible null reference assignment.
-        _connectionString = _configuration.GetConnectionString("DefaultConnection");
-#pragma warning restore CS8601 // Possible null reference assignment.
-    }
+        private readonly ILogger<LoadDataController> _logger;
+        private readonly IConfiguration _configuration;
+        private readonly string _connectionString;
+        private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
+        private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
+        private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
 
-    [HttpGet]
-    public IActionResult Index()
-    {
-        var activities = new List<string>
+        private readonly Backup_Zell_Controller _backupZellController;
+        private readonly B2_Amortizacion_Controller _b2AmortizacionController;
+        private readonly D1_Saldos_Cartera_Controller _d1SaldosCarteraController;
+        private readonly D2_Saldos_Contables_Controller _d2SaldosContablesController;
+        private readonly D3_Aplicaciones_Pagos_Controller _d3AplicacionesPagosController;
+        private readonly D4_Otorgamiento_Creditos_Controller _d4OtorgamientoCreditosController;
+        private readonly D5_Gestiones_Controller _d5GestionesController;
+        private readonly D6_Quebrantos_Controller _d6QuebrantosController;
+        private readonly D7_Juicios_Controller _d7JuiciosController;
+        private readonly D8_Sistema_Controller _d8SistemaController;
+        private readonly I2_Campaña_Quebrantos_Controller _i2CampañaQuebrantosController;
+        private readonly INT_MDC_CONTROLLER _intMdcController;
+        private readonly R3_LayoutMc_Controller _r3LayoutMcController;
+
+        public LoadDataController(
+            ILogger<LoadDataController> logger,
+            IConfiguration configuration,
+            Backup_Zell_Controller backupZellController,
+            B2_Amortizacion_Controller b2AmortizacionController,
+            D1_Saldos_Cartera_Controller d1SaldosCarteraController,
+            D2_Saldos_Contables_Controller d2SaldosContablesController,
+            D3_Aplicaciones_Pagos_Controller d3AplicacionesPagosController,
+            D4_Otorgamiento_Creditos_Controller d4OtorgamientoCreditosController,
+            D5_Gestiones_Controller d5GestionesController,
+            D6_Quebrantos_Controller d6QuebrantosController,
+            D7_Juicios_Controller d7JuiciosController,
+            D8_Sistema_Controller d8SistemaController,
+            I2_Campaña_Quebrantos_Controller i2CampañaQuebrantosController,
+            INT_MDC_CONTROLLER intMdcController,
+            R3_LayoutMc_Controller r3LayoutMcController)
         {
-            "Backup Zell",
-            "B2_Amortizaciones",
-            "C1_Dependencias",
-            "C2_Financiamientos",
-            "C3_Motios",
-            "C4_Bancos",
-            "C6_Resultados_Avance",
-            "D1_Saldos_Cartera",
-            "D1B_Saldos_Cartera",
-            "D2_Saldos_Contables",
-            "D2B_Saldos_Contables",
-            "D3_Aplicacion_Pagos",
-            "D4_Otorgamiento_Creditos",
-            "D5_Gestiones",
-            "D6_Quebrantos",
-            "D6B_Quebrantos",
-            "D7_Juicios",
-            "D8_Sistema",
-            "D9_Gestores_Area",
-            "I2_Campaña_Quebrantos",
-            "INT_MDC",
-            "INT2_MDC",
-            "R1_Quebrantos_Calculado_Most_Recent",
-            "R1_Quebrantos_Calculado_Specific_Date",
-            "R3_LayoutMc"
-        };
-        return View(activities);
-    }
+            _logger = logger;
+            _configuration = configuration;
+            _connectionString = _configuration.GetConnectionString("DefaultConnection");
 
-    [HttpPost("HandleActivity")]
-    public async Task<IActionResult> HandleActivity(string activityName)
-    {
-        try
-        {
-            IActionResult result;
-
-            switch (activityName.ToLower())
-            {
-                case "backup zell":
-                    var demograficsController = new Backup_Zell_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<Backup_Zell_Controller>>(),
-                        _configuration);
-                    result = await demograficsController.ProcessBackup();
-                    break;
-
-                case "b2_amortizaciones":
-                    var b2amortizacionescontroller = new B2_Amortizacion_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<B2_Amortizacion_Controller>>(),
-                        _configuration);
-                    result = await b2amortizacionescontroller.B2_Process();
-                    break;
-
-                case "d1_saldos_cartera":
-                    var saldosCarteraController = new D1_Saldos_Cartera_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D1_Saldos_Cartera_Controller>>(),
-                        _configuration);
-                    result = await saldosCarteraController.D1_ProcessSaldosCartera();
-                    break;
-
-                //case "d1b_saldos_cartera":
-                //    var saldosCarteraControllerb = new D1_Saldos_Cartera_Controller(
-                //        HttpContext.RequestServices.GetRequiredService<ILogger<D1_Saldos_Cartera_Controller>>(),
-                //        _configuration);
-                //    result = await saldosCarteraControllerb.D1_ProcessHistoricSaldosCartera();
-                //    break;    
-
-                case "d2_saldos_contables":
-                    var saldosContablesController = new D2_Saldos_Contables_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
-                        _configuration);
-                    result = await saldosContablesController.D2_ProcessSaldosContables();
-                    break;
-
-                case "d2b_saldos_contables":
-                    var saldosContablesControllerb = new D2_Saldos_Contables_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D2_Saldos_Contables_Controller>>(),
-                        _configuration);
-                    result = await saldosContablesControllerb.D2_ProcessHistoricSaldosContables();
-                    break;
-
-                case "d3_aplicacion_pagos":
-                    var aplicacionesPagosController = new D3_Aplicaciones_Pagos_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D3_Aplicaciones_Pagos_Controller>>(),
-                        _configuration);
-                    result = await aplicacionesPagosController.D3_ProcessAplicacionPagos();
-                    break;
-
-                case "d4_otorgamiento_creditos":
-                    var otorgamientoCreditosController = new D4_Otorgamiento_Creditos_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D4_Otorgamiento_Creditos_Controller>>(),
-                        _configuration);
-                    result = await otorgamientoCreditosController.D4_ProcessOtorgamientoCreditos();
-                    break;
-
-                case "d5_gestiones":
-                    var gestionesController = new D5_Gestiones_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D5_Gestiones_Controller>>(),
-                        _configuration);
-                    result = await gestionesController.D5_ProcessGestiones();
-                    break;
-
-                case "d6_quebrantos":
-                    var quebrantosController = new D6_Quebrantos_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
-                        _configuration);
-                    result = await quebrantosController.D6_ProcessQuebrantos();
-                    break;
-                case "d6b_quebrantos":
-                    var quebrantosControllerb = new D6_Quebrantos_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
-                        _configuration);
-                    result = await quebrantosControllerb.D6_ProcessHistoricQuebrantos();
-                    break;
-                
-                case "d7_juicios":
-                    var juiciosController = new D7_Juicios_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D7_Juicios_Controller>>(),
-                        _configuration);
-                    result = await juiciosController.D7_ProcessJuicios();
-                    break;
-
-                case "d8_sistema":
-                    var sistemasController = new D8_Sistema_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D8_Sistema_Controller>>(),
-                        _configuration);
-                    result = await sistemasController.D8_ProcessSistema();
-                    break;
-                
-                case "i2_campaña_quebrantos":
-                    var campañasController = new I2_Campaña_Quebrantos_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<I2_Campaña_Quebrantos_Controller>>(),
-                        _configuration);
-                    result = await campañasController.Process();
-                    break;
-
-                case "int1_mdc":
-                    var intmdccontroller = new INT_MDC_CONTROLLER(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<INT_MDC_CONTROLLER>>(),
-                        _configuration);
-                    result = await intmdccontroller.ProcessAll();
-                    break;
-
-                case "int2_mdc":
-                    var intmdc2controller = new INT_MDC_CONTROLLER(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<INT_MDC_CONTROLLER>>(),
-                        _configuration);
-                    result = await intmdc2controller.ProcessSC();
-                    break;
-
-                case "r1_quebrantos_calculado_most_recent":
-                    var quebrantosCalculadoController = new D6_Quebrantos_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<D6_Quebrantos_Controller>>(),
-                        _configuration);
-                    result = await quebrantosCalculadoController.D6_ProcessQuebrantosCalculationsAndExport();
-                    break;
-                
-                case "r3_layoutmc":
-                    var layout_Mc_Controller = new R3_LayoutMc_Controller(
-                        HttpContext.RequestServices.GetRequiredService<ILogger<R3_LayoutMc_Controller>>(),
-                        _configuration);
-                    result = await layout_Mc_Controller.R3_ProcessLayout();
-                    break;
-
-                default:
-                    _logger.LogError($"Unknown activity: {activityName}");
-                    return BadRequest($"Unknown activity: {activityName}");
-            }
-
-            // Return the actual result of the activity
-            return result;
+            _backupZellController = backupZellController;
+            _b2AmortizacionController = b2AmortizacionController;
+            _d1SaldosCarteraController = d1SaldosCarteraController;
+            _d2SaldosContablesController = d2SaldosContablesController;
+            _d3AplicacionesPagosController = d3AplicacionesPagosController;
+            _d4OtorgamientoCreditosController = d4OtorgamientoCreditosController;
+            _d5GestionesController = d5GestionesController;
+            _d6QuebrantosController = d6QuebrantosController;
+            _d7JuiciosController = d7JuiciosController;
+            _d8SistemaController = d8SistemaController;
+            _i2CampañaQuebrantosController = i2CampañaQuebrantosController;
+            _intMdcController = intMdcController;
+            _r3LayoutMcController = r3LayoutMcController;
         }
-        catch (Exception ex)
+
+        [HttpGet]
+        public IActionResult Index()
         {
-            _logger.LogError(ex, $"Error processing activity: {activityName}");
-            return StatusCode(500, $"Internal server error while processing activity: {activityName}");
+            var activities = new List<string>
+            {
+                "Backup Zell",
+                "B2_Amortizaciones",
+                "C1_Dependencias",
+                "C2_Financiamientos",
+                "C3_Motios",
+                "C4_Bancos",
+                "C6_Resultados_Avance",
+                "D1_Saldos_Cartera",
+                "D1B_Saldos_Cartera",
+                "D2_Saldos_Contables",
+                "D2B_Saldos_Contables",
+                "D3_Aplicacion_Pagos",
+                "D4_Otorgamiento_Creditos",
+                "D5_Gestiones",
+                "D6_Quebrantos",
+                "D6B_Quebrantos",
+                "D7_Juicios",
+                "D8_Sistema",
+                "D9_Gestores_Area",
+                "I2_Campaña_Quebrantos",
+                "INT_MDC",
+                "INT2_MDC",
+                "R1_Quebrantos_Calculado_Most_Recent",
+                "R1_Quebrantos_Calculado_Specific_Date",
+                "R3_LayoutMc"
+            };
+            return View(activities);
+        }
+
+        [HttpPost("HandleActivity")]
+        public async Task<IActionResult> HandleActivity(string activityName)
+        {
+            try
+            {
+                IActionResult result;
+                switch (activityName.ToLower())
+                {
+                    case "backup zell":
+                        result = await _backupZellController.ProcessBackup();
+                        break;
+                    case "b2_amortizaciones":
+                        result = await _b2AmortizacionController.B2_Process();
+                        break;
+                    case "d1_saldos_cartera":
+                        result = await _d1SaldosCarteraController.D1_ProcessSaldosCartera();
+                        break;
+                    case "d1b_saldos_cartera":
+                        result = await _d1SaldosCarteraController.D1_ProcessHistoricSaldosCartera();
+                        break;
+                    case "d2_saldos_contables":
+                        result = await _d2SaldosContablesController.D2_ProcessSaldosContables();
+                        break;
+                    case "d2b_saldos_contables":
+                        result = await _d2SaldosContablesController.D2_ProcessHistoricSaldosContables();
+                        break;
+                    case "d3_aplicacion_pagos":
+                        result = await _d3AplicacionesPagosController.D3_ProcessAplicacionPagos();
+                        break;
+                    case "d4_otorgamiento_creditos":
+                        result = await _d4OtorgamientoCreditosController.D4_ProcessOtorgamientoCreditos();
+                        break;
+                    case "d5_gestiones":
+                        result = await _d5GestionesController.D5_ProcessGestiones();
+                        break;
+                    case "d6_quebrantos":
+                        result = await _d6QuebrantosController.D6_ProcessQuebrantos();
+                        break;
+                    case "d6b_quebrantos":
+                        result = await _d6QuebrantosController.D6_ProcessHistoricQuebrantos();
+                        break;
+                    case "d7_juicios":
+                        result = await _d7JuiciosController.D7_ProcessJuicios();
+                        break;
+                    case "d8_sistema":
+                        result = await _d8SistemaController.D8_ProcessSistema();
+                        break;
+                    case "i2_campaña_quebrantos":
+                        result = await _i2CampañaQuebrantosController.Process();
+                        break;
+                    case "int_mdc":
+                        result = await _intMdcController.ProcessAll();
+                        break;
+                    case "int2_mdc":
+                        result = await _intMdcController.ProcessSC();
+                        break;
+                    case "r1_quebrantos_calculado_most_recent":
+                        result = await _d6QuebrantosController.D6_ProcessQuebrantosCalculationsAndExport();
+                        break;
+                    case "r3_layoutmc":
+                        result = await _r3LayoutMcController.R3_ProcessLayout();
+                        break;
+                    default:
+                        _logger.LogError("Unknown activity: {ActivityName}", activityName);
+                        return BadRequest($"Unknown activity: {activityName}");
+                }
+                return result;
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogError(ex, "Error processing activity: {ActivityName}", activityName);
+                return StatusCode(500, $"Internal server error while processing activity: {activityName}");
+            }
         }
     }
 }
