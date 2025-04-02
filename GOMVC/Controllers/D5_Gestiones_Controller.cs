@@ -5,6 +5,7 @@ using MySql.Data.MySqlClient;
 using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -20,12 +21,14 @@ namespace GOMVC.Controllers
         private readonly IConfiguration _configuration;
         private readonly string _connectionString;
 
-        // Rutas base para archivos y logs
+        // Rutas base configuradas (se recomienda externalizarlas en appsettings.json)
         private readonly string _filePath = @"C:\Users\Go Credit\Documents\DATA\FLAT FILES";
         private readonly string _historicFilePath = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES";
         private readonly string _logsFolder = @"C:\Users\Go Credit\Documents\DATA\LOGS";
         private readonly string _historicLogsFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC LOGS";
+        // Separamos las carpetas para archivos originales y procesados
         private readonly string _archiveFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Archive";
+        private readonly string _processedFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Processed";
         private readonly string _errorFolder = @"C:\Users\Go Credit\Documents\DATA\HISTORIC FILES\Error";
 
         // Nombre dinámico del log basado en el controlador
@@ -47,94 +50,119 @@ namespace GOMVC.Controllers
         }
 
         /// <summary>
-        /// Proceso completo para D5 Gestiones:
-        /// 1. Identifica archivos Excel que cumplen con el patrón "Re_GestionesRO_*.xlsx".
-        /// 2. Procesa el XLSX en chunks, eliminando saltos de línea y delimitadores no deseados, y convirtiendo correctamente las fechas.
-        /// 3. Genera un CSV delimitado por '|' (UTF-8 con BOM).
-        /// 4. Carga el CSV en la tabla de staging (D5_Stage_Gestiones).
-        /// 5. Normaliza la información en la tabla de staging.
-        /// 6. Inserta en la tabla final (D5_Gestiones) solo los registros nuevos mediante LEFT JOIN con pseudo-concat.
+        /// Proceso completo para D5 Gestiones, mejorado con:
+        /// - Middleware de Correlation ID
+        /// - Medición de rendimiento
+        /// - Manejo de excepciones y logging enriquecido
+        /// - Movimiento diferenciado de archivos originales y procesados
         /// </summary>
         [HttpPost("D5_ProcessGestiones")]
         public async Task<IActionResult> D5_ProcessGestiones()
         {
+            // Verificar si existe el contexto HTTP y extraer el Correlation ID o generar uno nuevo
+            string correlationId = (Request?.Headers != null && Request.Headers.ContainsKey("X-Correlation-ID"))
+                ? Request.Headers["X-Correlation-ID"].ToString()
+                : Guid.NewGuid().ToString();
+
+            var stopwatch = Stopwatch.StartNew();
+
             var logPath = Path.Combine(_logsFolder, _logFileName);
             var logBuilder = new StringBuilder();
             bool hasErrors = false;
 
-            logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D5 process started.");
-            _logger.LogInformation("D5 process started.");
+            logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{correlationId}] - D5 process started.");
+            _logger.LogInformation("[{CorrelationId}] D5 process started.", correlationId);
 
-            // 1. Identificar archivos Excel según el patrón.
-            var files = Directory.GetFiles(_filePath, "Re_GestionesRO_*.xlsx");
-            if (files.Length == 0)
+            try
             {
-                string errorLog = "No se encontraron archivos que cumplan el patrón 'Re_GestionesRO_*.xlsx'.";
-                logBuilder.AppendLine(errorLog);
-                _logger.LogError(errorLog);
-                await WriteLogAsync(logBuilder.ToString(), logPath);
-                return NotFound(errorLog);
-            }
-
-            // 2. Truncar la tabla de staging.
-            await TruncateStagingTableAsync(logBuilder);
-
-            // Procesar cada archivo.
-            foreach (var file in files)
-            {
-                string? csvFilePath = null;
-                logBuilder.AppendLine($"Processing file: {file}");
-                try
+                // 1. Identificar archivos Excel según el patrón.
+                var files = Directory.GetFiles(_filePath, "Re_GestionesRO_*.xlsx");
+                if (files.Length == 0)
                 {
-                    // 3. Procesar el XLSX en chunks: limpiar saltos de línea y delimitadores, y convertir fechas.
-                    csvFilePath = await ProcessXlsxToCsvAsync(file, logBuilder);
-
-                    // 4. Cargar el CSV a la tabla de staging.
-                    await BulkInsertToStageAsync(csvFilePath, logBuilder);
-
-                    // 5. Normalizar datos en la tabla de staging.
-                    await NormalizeStageDataAsync(logBuilder);
-
-                    // 6. Insertar solo registros nuevos a la tabla final.
-                    await InsertToFinalTableAsync(logBuilder);
-
-                    // Mover archivos a carpeta Archive.
-                    MoveFile(file, _archiveFolder, logBuilder);
-                    if (csvFilePath != null)
-                        MoveFile(csvFilePath, _archiveFolder, logBuilder);
-                }
-                catch (Exception ex)
-                {
-                    logBuilder.AppendLine($"Error processing file {file}: {ex.Message}");
-                    _logger.LogError(ex, $"Error processing file {file}");
-                    hasErrors = true;
-                    // Mover archivos problemáticos a carpeta Error.
-                    MoveFile(file, _errorFolder, logBuilder);
-                    if (csvFilePath != null && System.IO.File.Exists(csvFilePath))
-                        MoveFile(csvFilePath, _errorFolder, logBuilder);
+                    string errorLog = $"[{correlationId}] No se encontraron archivos que cumplan el patrón 'Re_GestionesRO_*.xlsx'.";
+                    logBuilder.AppendLine(errorLog);
+                    _logger.LogError(errorLog);
                     await WriteLogAsync(logBuilder.ToString(), logPath);
-                    throw;
+                    return NotFound(errorLog);
                 }
-            }
 
-            logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - D5 process completed.");
-            _logger.LogInformation("D5 process completed.");
-            await WriteLogAsync(logBuilder.ToString(), logPath);
-            MoveLogToHistoric(logPath, _historicLogsFolder);
+                // 2. Truncar la tabla de staging.
+                await TruncateStagingTableAsync(logBuilder, correlationId);
+
+                // Procesar cada archivo.
+                foreach (var file in files)
+                {
+                    string? csvFilePath = null;
+                    logBuilder.AppendLine($"[{correlationId}] Processing file: {file}");
+                    try
+                    {
+                        if (!System.IO.File.Exists(file))
+                        {
+                            throw new FileNotFoundException($"Archivo no encontrado: {file}");
+                        }
+
+                        // 3. Procesar el XLSX en chunks.
+                        csvFilePath = await ProcessXlsxToCsvAsync(file, logBuilder, correlationId);
+
+                        // 4. Cargar el CSV a la tabla de staging.
+                        await BulkInsertToStageAsync(csvFilePath, logBuilder, correlationId);
+
+                        // 5. Normalizar datos en la tabla de staging.
+                        await NormalizeStageDataAsync(logBuilder, correlationId);
+
+                        // 6. Insertar solo registros nuevos a la tabla final.
+                        await InsertToFinalTableAsync(logBuilder, correlationId);
+
+                        // Mover archivo original y procesado.
+                        MoveFile(file, _archiveFolder, logBuilder, correlationId);
+                        if (csvFilePath != null)
+                            MoveFile(csvFilePath, _processedFolder, logBuilder, correlationId);
+                    }
+                    catch (Exception ex)
+                    {
+                        logBuilder.AppendLine($"[{correlationId}] Error processing file {file}: {ex.Message}");
+                        _logger.LogError(ex, "[{CorrelationId}] Error processing file {File}", correlationId, file);
+                        hasErrors = true;
+                        MoveFile(file, _errorFolder, logBuilder, correlationId);
+                        if (csvFilePath != null && System.IO.File.Exists(csvFilePath))
+                            MoveFile(csvFilePath, _errorFolder, logBuilder, correlationId);
+                        await WriteLogAsync(logBuilder.ToString(), logPath);
+                        throw new ApplicationException($"[{correlationId}] Error processing file {file}", ex);
+                    }
+                }
+
+                logBuilder.AppendLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{correlationId}] - D5 process completed.");
+                _logger.LogInformation("[{CorrelationId}] D5 process completed.", correlationId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[{CorrelationId}] Process failed.", correlationId);
+                await WriteLogAsync(logBuilder.ToString(), logPath);
+                return StatusCode(500, $"[{correlationId}] D5 process failed. Check the log for details.");
+            }
+            finally
+            {
+                stopwatch.Stop();
+                logBuilder.AppendLine($"[{correlationId}] Total process time: {stopwatch.ElapsedMilliseconds} ms");
+                _logger.LogInformation("[{CorrelationId}] Total process time: {Elapsed} ms", correlationId, stopwatch.ElapsedMilliseconds);
+                await WriteLogAsync(logBuilder.ToString(), logPath);
+                MoveLogToHistoric(logPath, _historicLogsFolder);
+            }
 
             return hasErrors
-                ? StatusCode(500, "D5 process completed with errors. Check the log for details.")
-                : Ok("D5 process completed successfully.");
+                ? StatusCode(500, $"[{correlationId}] D5 process completed with errors. Check the log for details.")
+                : Ok($"[{correlationId}] D5 process completed successfully.");
         }
 
         #region Métodos de Procesamiento de XLSX a CSV
 
         /// <summary>
         /// Procesa el archivo XLSX en chunks y genera un CSV delimitado por '|' con encoding UTF-8 con BOM.
-        /// Se limpia cada celda (eliminando saltos de línea y '|' ) y se convierte el contenido de celdas de fecha usando su valor nativo.
+        /// Incluye validaciones y logging con Correlation ID.
         /// </summary>
-        private async Task<string> ProcessXlsxToCsvAsync(string xlsxFilePath, StringBuilder logBuilder)
+        private async Task<string> ProcessXlsxToCsvAsync(string xlsxFilePath, StringBuilder logBuilder, string correlationId)
         {
+            // Se genera el CSV temporal en la carpeta temporal del sistema.
             string tempCsvPath = Path.Combine(Path.GetTempPath(), $"{Path.GetFileNameWithoutExtension(xlsxFilePath)}_processed.csv");
 
             using (var package = new ExcelPackage(new FileInfo(xlsxFilePath)))
@@ -158,7 +186,7 @@ namespace GOMVC.Controllers
                     for (int startRow = 2; startRow <= totalRows; startRow += chunkSize)
                     {
                         int endRow = Math.Min(startRow + chunkSize - 1, totalRows);
-                        logBuilder.AppendLine($"Processing rows {startRow} to {endRow}.");
+                        logBuilder.AppendLine($"[{correlationId}] Processing rows {startRow} to {endRow}.");
 
                         for (int row = startRow; row <= endRow; row++)
                         {
@@ -169,7 +197,6 @@ namespace GOMVC.Controllers
                                 string cellValue;
                                 if (cell.Value is DateTime dt)
                                 {
-                                    // Formateamos a "yyyy-MM-dd" ya que en MySQL se espera DATE.
                                     cellValue = dt.ToString("yyyy-MM-dd");
                                 }
                                 else
@@ -187,7 +214,7 @@ namespace GOMVC.Controllers
                     }
                 }
             }
-            logBuilder.AppendLine($"CSV file generated: {tempCsvPath}");
+            logBuilder.AppendLine($"[{correlationId}] CSV file generated: {tempCsvPath}");
             return tempCsvPath;
         }
 
@@ -200,7 +227,7 @@ namespace GOMVC.Controllers
         }
 
         /// <summary>
-        /// Intenta convertir una cadena de fecha a un formato MySQL datetime aceptable (solo la parte de la fecha).
+        /// Convierte una cadena de fecha a un formato MySQL (yyyy-MM-dd).
         /// </summary>
         private string ConvertToMySqlDate(string input)
         {
@@ -242,7 +269,7 @@ namespace GOMVC.Controllers
         /// <summary>
         /// Trunca la tabla de staging D5_Stage_Gestiones.
         /// </summary>
-        private async Task TruncateStagingTableAsync(StringBuilder logBuilder)
+        private async Task TruncateStagingTableAsync(StringBuilder logBuilder, string correlationId)
         {
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -251,16 +278,16 @@ namespace GOMVC.Controllers
                 using (var cmd = new MySqlCommand(truncateSql, connection))
                 {
                     await cmd.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine("Truncated table D5_Stage_Gestiones.");
-                    _logger.LogInformation("Truncated table D5_Stage_Gestiones.");
+                    logBuilder.AppendLine($"[{correlationId}] Truncated table D5_Stage_Gestiones.");
+                    _logger.LogInformation("[{CorrelationId}] Truncated table D5_Stage_Gestiones.", correlationId);
                 }
             }
         }
 
         /// <summary>
-        /// Carga el CSV generado a la tabla de staging D5_Stage_Gestiones mediante LOAD DATA LOCAL INFILE.
+        /// Carga el CSV generado a la tabla de staging mediante LOAD DATA LOCAL INFILE dentro de una transacción.
         /// </summary>
-        private async Task BulkInsertToStageAsync(string csvFilePath, StringBuilder logBuilder)
+        private async Task BulkInsertToStageAsync(string csvFilePath, StringBuilder logBuilder, string correlationId)
         {
             using (var connection = new MySqlConnection(_connectionString))
             {
@@ -279,27 +306,24 @@ namespace GOMVC.Controllers
                         {
                             cmd.CommandTimeout = 3600;
                             await cmd.ExecuteNonQueryAsync();
-                            logBuilder.AppendLine("Data loaded into D5_Stage_Gestiones.");
+                            logBuilder.AppendLine($"[{correlationId}] Data loaded into D5_Stage_Gestiones.");
                         }
                         await transaction.CommitAsync();
                     }
                     catch (Exception ex)
                     {
                         await transaction.RollbackAsync();
-                        logBuilder.AppendLine($"Bulk insert error: {ex.Message}");
-                        throw;
+                        logBuilder.AppendLine($"[{correlationId}] Bulk insert error: {ex.Message}");
+                        throw new ApplicationException($"[{correlationId}] Error during bulk insert", ex);
                     }
                 }
             }
         }
 
         /// <summary>
-        /// Normaliza los datos en la tabla de staging, aplicando:
-        /// - Conversión de cadenas en blanco a NULL.
-        /// - Eliminación de breaklines y espacios extra.
-        /// - Formateo de campos de fecha.
+        /// Normaliza los datos en la tabla de staging.
         /// </summary>
-        private async Task NormalizeStageDataAsync(StringBuilder logBuilder)
+        private async Task NormalizeStageDataAsync(StringBuilder logBuilder, string correlationId)
         {
             string sqlUpdate = @"
                 UPDATE D5_Stage_Gestiones
@@ -314,13 +338,6 @@ namespace GOMVC.Controllers
                     Coordenadas = NULLIF(TRIM(REPLACE(REPLACE(Coordenadas, '\r', ' '), '\n', ' ')), ''),
                     Credito = NULLIF(TRIM(REPLACE(REPLACE(Credito, '\r', ' '), '\n', ' ')), ''),
                     Estatus_Promesa = NULLIF(TRIM(REPLACE(REPLACE(Estatus_Promesa, '\r', ' '), '\n', ' ')), ''),
-                    Monto_Promesa = NULLIF(TRIM(REPLACE(REPLACE(Monto_Promesa, '\r', ' '), '\n', ' ')), ''),
-                    Origen = NULLIF(TRIM(REPLACE(REPLACE(Origen, '\r', ' '), '\n', ' ')), ''),
-                    Producto = NULLIF(TRIM(REPLACE(REPLACE(Producto, '\r', ' '), '\n', ' ')), ''),
-                    Resultado = NULLIF(TRIM(REPLACE(REPLACE(Resultado, '\r', ' '), '\n', ' ')), ''),
-                    Telefono = NULLIF(TRIM(REPLACE(REPLACE(Telefono, '\r', ' '), '\n', ' ')), ''),
-                    Tipo_Pago = NULLIF(TRIM(REPLACE(REPLACE(Tipo_Pago, '\r', ' '), '\n', ' ')), ''),
-                    Usuario_Registro = NULLIF(TRIM(REPLACE(REPLACE(Usuario_Registro, '\r', ' '), '\n', ' ')), ''),
                     Fecha_Actividad = CASE 
                         WHEN TRIM(Fecha_Actividad) = '' THEN NULL
                         ELSE DATE_FORMAT(STR_TO_DATE(Fecha_Actividad, '%Y-%m-%d %H:%i:%s'), '%Y-%m-%d')
@@ -328,7 +345,15 @@ namespace GOMVC.Controllers
                     Fecha_Promesa = CASE 
                         WHEN TRIM(Fecha_Promesa) = '' THEN NULL
                         ELSE DATE_FORMAT(STR_TO_DATE(Fecha_Promesa, '%Y-%m-%d'), '%Y-%m-%d')
-                    END;";
+                    END,
+                    Monto_Promesa = NULLIF(TRIM(REPLACE(REPLACE(Monto_Promesa, '\r', ' '), '\n', ' ')), ''),
+                    Origen = NULLIF(TRIM(REPLACE(REPLACE(Origen, '\r', ' '), '\n', ' ')), ''),
+                    Producto = NULLIF(TRIM(REPLACE(REPLACE(Producto, '\r', ' '), '\n', ' ')), ''),
+                    Resultado = NULLIF(TRIM(REPLACE(REPLACE(Resultado, '\r', ' '), '\n', ' ')), ''),
+                    Telefono = NULLIF(TRIM(REPLACE(REPLACE(Telefono, '\r', ' '), '\n', ' ')), ''),
+                    Tipo_Pago = NULLIF(TRIM(REPLACE(REPLACE(Tipo_Pago, '\r', ' '), '\n', ' ')), ''),
+                    Usuario_Registro = NULLIF(TRIM(REPLACE(REPLACE(Usuario_Registro, '\r', ' '), '\n', ' ')), '')
+                ;";
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
@@ -336,17 +361,15 @@ namespace GOMVC.Controllers
                 {
                     cmd.CommandTimeout = 3600;
                     int rowsAffected = await cmd.ExecuteNonQueryAsync();
-                    logBuilder.AppendLine($"Normalized {rowsAffected} rows in D5_Stage_Gestiones.");
+                    logBuilder.AppendLine($"[{correlationId}] Normalized {rowsAffected} rows in D5_Stage_Gestiones.");
                 }
             }
         }
 
         /// <summary>
-        /// Inserta solo los registros nuevos de D5_Stage_Gestiones en la tabla final D5_Gestiones.
-        /// Se utiliza CONCAT_WS para generar una clave única en ambas tablas y LEFT JOIN para filtrar registros ya existentes.
-        /// Se formatean las fechas de la tabla final para igualar el formato de staging.
+        /// Inserta solo los registros nuevos de D5_Stage_Gestiones en la tabla final D5_Gestiones, controlando duplicados.
         /// </summary>
-        private async Task InsertToFinalTableAsync(StringBuilder logBuilder)
+        private async Task InsertToFinalTableAsync(StringBuilder logBuilder, string correlationId)
         {
             string sqlInsert = @"
                 INSERT INTO D5_Gestiones (
@@ -436,7 +459,6 @@ namespace GOMVC.Controllers
                         TRIM(COALESCE(f.Usuario_Registro, ''))
                      )
                 WHERE f.Id_Credito IS NULL;";
-
             using (var connection = new MySqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
@@ -448,15 +470,15 @@ namespace GOMVC.Controllers
                         {
                             cmd.CommandTimeout = 3600;
                             int rowsAffected = await cmd.ExecuteNonQueryAsync();
-                            logBuilder.AppendLine($"Inserted {rowsAffected} new rows into D5_Gestiones.");
+                            logBuilder.AppendLine($"[{correlationId}] Inserted {rowsAffected} new rows into D5_Gestiones.");
                         }
                         await transaction.CommitAsync();
                     }
                     catch (Exception ex)
                     {
                         await transaction.RollbackAsync();
-                        logBuilder.AppendLine($"Final insert error: {ex.Message}");
-                        throw;
+                        logBuilder.AppendLine($"[{correlationId}] Final insert error: {ex.Message}");
+                        throw new ApplicationException($"[{correlationId}] Error inserting into final table", ex);
                     }
                 }
             }
@@ -466,6 +488,9 @@ namespace GOMVC.Controllers
 
         #region Métodos Genéricos de Log y Movimiento de Archivos
 
+        /// <summary>
+        /// Escribe el log en el archivo especificado.
+        /// </summary>
         private async Task WriteLogAsync(string content, string logPath)
         {
             try
@@ -474,16 +499,19 @@ namespace GOMVC.Controllers
                 if (!Directory.Exists(directory))
                     Directory.CreateDirectory(directory!);
                 await System.IO.File.WriteAllTextAsync(logPath, content);
-                _logger.LogInformation($"Log written to: {logPath}");
+                _logger.LogInformation("Log written to: {LogPath}", logPath);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error writing log to {logPath}");
+                _logger.LogError(ex, "Error writing log to {LogPath}", logPath);
                 throw;
             }
         }
 
-        private void MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder)
+        /// <summary>
+        /// Mueve el archivo de origen a la carpeta de destino.
+        /// </summary>
+        private void MoveFile(string sourceFilePath, string destinationFolder, StringBuilder logBuilder, string correlationId)
         {
             try
             {
@@ -493,24 +521,27 @@ namespace GOMVC.Controllers
                 if (System.IO.File.Exists(destinationFilePath))
                     System.IO.File.Delete(destinationFilePath);
                 System.IO.File.Move(sourceFilePath, destinationFilePath);
-                logBuilder.AppendLine($"Moved file: {sourceFilePath} -> {destinationFilePath}");
-                _logger.LogInformation($"Moved file: {sourceFilePath} -> {destinationFilePath}");
+                logBuilder.AppendLine($"[{correlationId}] Moved file: {sourceFilePath} -> {destinationFilePath}");
+                _logger.LogInformation("[{CorrelationId}] Moved file: {Source} -> {Destination}", correlationId, sourceFilePath, destinationFilePath);
             }
             catch (Exception ex)
             {
-                logBuilder.AppendLine($"Error moving file {sourceFilePath}: {ex.Message}");
-                _logger.LogError(ex, $"Error moving file {sourceFilePath}");
+                logBuilder.AppendLine($"[{correlationId}] Error moving file {sourceFilePath}: {ex.Message}");
+                _logger.LogError(ex, "[{CorrelationId}] Error moving file {File}", correlationId, sourceFilePath);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Mueve el log actual a la carpeta histórica.
+        /// </summary>
         private void MoveLogToHistoric(string logPath, string historicLogsFolder)
         {
             try
             {
                 if (!System.IO.File.Exists(logPath))
                 {
-                    _logger.LogWarning($"Log file does not exist: {logPath}");
+                    _logger.LogWarning("Log file does not exist: {LogPath}", logPath);
                     return;
                 }
                 if (!Directory.Exists(historicLogsFolder))
@@ -519,7 +550,7 @@ namespace GOMVC.Controllers
                 var newLogName = Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath);
                 var destPath = Path.Combine(historicLogsFolder, newLogName);
                 System.IO.File.Move(logPath, destPath);
-                _logger.LogInformation($"Log moved to historic folder: {destPath}");
+                _logger.LogInformation("Log moved to historic folder: {DestPath}", destPath);
             }
             catch (Exception ex)
             {
@@ -528,6 +559,9 @@ namespace GOMVC.Controllers
             }
         }
 
+        /// <summary>
+        /// Mueve un log existente a la carpeta histórica.
+        /// </summary>
         private void MoveExistingLog(string logPath, string historicLogsFolder)
         {
             try
@@ -538,11 +572,11 @@ namespace GOMVC.Controllers
                 var destFilePath = Path.Combine(historicLogsFolder,
                     Path.GetFileNameWithoutExtension(logPath) + $"_{timestamp}" + Path.GetExtension(logPath));
                 System.IO.File.Move(logPath, destFilePath);
-                _logger.LogInformation($"Existing log moved: {destFilePath}");
+                _logger.LogInformation("Existing log moved: {DestFilePath}", destFilePath);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error moving existing log: {ex.Message}");
+                _logger.LogError(ex, "Error moving existing log: {ErrorMessage}", ex.Message);
             }
         }
 

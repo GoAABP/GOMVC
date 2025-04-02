@@ -65,6 +65,8 @@ builder.Services.AddScoped<D8_Sistema_Controller>();
 builder.Services.AddScoped<I2_Campaña_Quebrantos_Controller>();
 builder.Services.AddScoped<INT_MDC_CONTROLLER>();
 builder.Services.AddScoped<R3_LayoutMc_Controller>();
+builder.Services.AddScoped<R5_Asignacion_Nomina_Controller>();
+
 
 var app = builder.Build();
 

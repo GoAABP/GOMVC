@@ -29,6 +29,8 @@ namespace GOMVC.Controllers
         private readonly I2_Campaña_Quebrantos_Controller _i2CampañaQuebrantosController;
         private readonly INT_MDC_CONTROLLER _intMdcController;
         private readonly R3_LayoutMc_Controller _r3LayoutMcController;
+        private readonly R5_Asignacion_Nomina_Controller _r5_Asignacion_Nomina_Controller;
+
 
         public LoadDataController(
             ILogger<LoadDataController> logger,
@@ -45,7 +47,9 @@ namespace GOMVC.Controllers
             D8_Sistema_Controller d8SistemaController,
             I2_Campaña_Quebrantos_Controller i2CampañaQuebrantosController,
             INT_MDC_CONTROLLER intMdcController,
-            R3_LayoutMc_Controller r3LayoutMcController)
+            R3_LayoutMc_Controller r3LayoutMcController,
+            R5_Asignacion_Nomina_Controller r5_Asignacion_Nomina_Controller
+        )
         {
             _logger = logger;
             _configuration = configuration;
@@ -64,6 +68,7 @@ namespace GOMVC.Controllers
             _i2CampañaQuebrantosController = i2CampañaQuebrantosController;
             _intMdcController = intMdcController;
             _r3LayoutMcController = r3LayoutMcController;
+            _r5_Asignacion_Nomina_Controller = r5_Asignacion_Nomina_Controller;
         }
 
         [HttpGet]
@@ -95,7 +100,8 @@ namespace GOMVC.Controllers
                 "INT2_MDC",
                 "R1_Quebrantos_Calculado_Most_Recent",
                 "R1_Quebrantos_Calculado_Specific_Date",
-                "R3_LayoutMc"
+                "R3_LayoutMc",
+                "R5_Asignacion_Nomina"
             };
             return View(activities);
         }
@@ -161,6 +167,9 @@ namespace GOMVC.Controllers
                         break;
                     case "r3_layoutmc":
                         result = await _r3LayoutMcController.R3_ProcessLayout();
+                        break;
+                    case "r5_asignacion_nomina":
+                        result = await _r5_Asignacion_Nomina_Controller.R5_ProcessAsignacionNomina();
                         break;
                     default:
                         _logger.LogError("Unknown activity: {ActivityName}", activityName);
